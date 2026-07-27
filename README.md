@@ -1,35 +1,55 @@
 # Big Two Vakantiestand
 
-Mobiele webapp voor een gedeelde Big Two-competitie. De interface draait als statische site op GitHub Pages. Supabase bewaart de gedeelde spelers, potjes en scores.
+Mobiele webapp voor een gedeelde Big Two-vakantiecompetitie. De interface draait op GitHub Pages; Supabase bewaart de gedeelde spelers, potjes, scores en het logboek.
 
-## Functies
+## Toegang en beheer
 
-- deelnemers aanvinken per potje;
-- winnaar kiezen uit alleen de geselecteerde spelers;
-- overgebleven kaarten invoeren;
-- strafpunten automatisch berekenen;
-- 1 punt per gewonnen potje;
-- totaal potjes en potjes per speler;
-- winstpercentage, totaal en gemiddelde strafpunten;
-- ranglijst en volledige historie;
-- spelers activeren/deactiveren;
-- foutief potje verwijderen met beheerderscode;
-- CSV-export;
-- installeerbaar als app op een telefoon.
+- Er is **geen groepscode** meer.
+- Iedereen die de website kan openen, kan de stand bekijken en een potje toevoegen.
+- De beheerder voegt de spelerslijst toe met de beheerderscode.
+- Alle namen kunnen in één keer worden geplakt: één naam per regel of gescheiden door komma’s.
+- Alleen de beheerderscode kan spelers toevoegen, activeren/deactiveren en potjes aanpassen of verwijderen.
+- De standaard beheerderscode in `supabase/setup.sql` is `9876`. Wijzig deze vóór ingebruikname.
+
+Omdat er geen groepscode is, is de inhoud van de website zichtbaar voor iedereen die de GitHub Pages-link kent.
+
+## Ranglijst
+
+- Een speler wordt pas officieel geklasseerd na **10 gespeelde potjes**.
+- Spelers met 0–9 potjes blijven zichtbaar, maar staan grijs onder de officiële ranglijst.
+- De officiële ranglijst wordt gesorteerd op **laagste gemiddelde strafpunten per gespeeld potje**.
+- Bij exact hetzelfde gemiddelde beslist eerst het aantal gewonnen potjes en daarna het aantal gespeelde potjes.
+- Overwinningen en alle strafpunten worden vanaf het eerste potje bijgehouden.
 
 ## Puntentelling
 
-- winnaar: 1 competitiepunt en 0 strafpunten;
-- 1–9 kaarten: aantal kaarten als strafpunten;
+Bij drie spelers kan iedere speler maximaal 18 kaarten hebben. De invoergrens wordt automatisch aangepast aan het aantal deelnemers.
+
+- winnaar: 0 strafpunten;
+- 1–9 kaarten: 1 strafpunt per kaart;
 - 10–12 kaarten: dubbele strafpunten;
-- 13 kaarten: 39 strafpunten;
-- ranglijst: meeste competitiepunten, dan hoogste winstpercentage, dan laagste gemiddelde strafpunten.
+- 13 kaarten of meer: altijd 39 strafpunten.
 
-## Eerst lokaal proberen
+## Logboek
 
-`config.js` staat standaard op `demoMode: true`. Open `index.html` via een lokale webserver. De demo gebruikt `localStorage`; de gegevens worden dus nog niet tussen apparaten gedeeld.
+De website vraagt bij het openen wie de site gebruikt. De gekozen naam wordt lokaal onthouden en kan bovenaan worden gewijzigd.
 
-Bijvoorbeeld met Python:
+Het logboek registreert:
+
+- het openen van de website, eenmaal per browsersessie;
+- toevoegen van een potje;
+- aanpassen van winnaar, kaarten of opmerking;
+- verwijderen van een potje;
+- toevoegen van een speler;
+- activeren of deactiveren van een speler.
+
+**Let op:** de identiteit is gebaseerd op de naam die de gebruiker zelf kiest. Dit is geschikt voor een vertrouwde vakantiegroep, maar is geen waterdichte gebruikersauthenticatie.
+
+## Eerst in demomodus testen
+
+`config.js` staat standaard op `demoMode: true`. De gegevens en het logboek staan dan alleen in de browser van dat apparaat. De demoversie begint met een lege spelerslijst; ga naar **Beheer** om de namen toe te voegen.
+
+Gebruik bij voorkeur een lokale webserver:
 
 ```bash
 python -m http.server 8080
@@ -37,33 +57,31 @@ python -m http.server 8080
 
 Open daarna `http://localhost:8080`.
 
-## Gedeelde database instellen
+## Gedeelde database instellen of bijwerken
 
-1. Maak een Supabase-project.
-2. Open **SQL Editor** en voer `supabase/setup.sql` volledig uit.
-3. Wijzig onderaan het SQL-bestand vóór uitvoering:
+1. Maak een Supabase-project, of open het bestaande project.
+2. Open **SQL Editor**.
+3. Voer `supabase/setup.sql` volledig uit. Het script verwijdert de oude groepscode en werkt een eerdere installatie bij.
+4. Wijzig bij een eerste installatie onderaan het SQL-bestand vooraf:
    - groepsslug;
    - groepsnaam;
-   - groepscode;
    - beheerderscode.
-4. Open in Supabase **Project Settings > API**.
-5. Kopieer de Project URL en de Publishable key.
-6. Vul deze waarden in `config.js` in en zet `demoMode` op `false`.
-7. Zorg dat `groupSlug` exact gelijk is aan de slug in het SQL-bestand.
+5. Open in Supabase **Project Settings > API**.
+6. Kopieer de Project URL en Publishable key.
+7. Vul deze in `config.js` in en zet `demoMode` op `false`.
+8. Zorg dat `groupSlug` gelijk is aan de slug in de database.
 
 Gebruik uitsluitend de **Publishable key** in de website. Plaats nooit een `service_role`- of secret key in GitHub.
 
-## Publiceren op GitHub Pages
+## Publiceren of bijwerken op GitHub Pages
 
-1. Maak een nieuwe repository, bijvoorbeeld `big2-score`.
-2. Upload alle bestanden uit deze map naar de root van de repository.
-3. Ga naar **Settings > Pages**.
-4. Kies **Deploy from a branch**.
-5. Selecteer `main` en `/ (root)`.
-6. Na publicatie staat de site op `https://JOUWNAAM.github.io/big2-score/`.
+1. Upload de bestanden naar de hoofdmap van de repository.
+2. Overschrijf bij een update in ieder geval `index.html`, `app.js`, `styles.css`, `sw.js`, `README.md` en `supabase/setup.sql`.
+3. Voer daarna het nieuwe `supabase/setup.sql` volledig uit in Supabase.
+4. Ga naar **Settings > Pages**.
+5. Gebruik `main` en `/ (root)` als publicatiebron.
+6. Herlaad de website na publicatie.
 
 ## Beveiligingsmodel
 
-De database-tabellen zijn niet direct toegankelijk voor publieke gebruikers. De website mag alleen vooraf gedefinieerde databasefuncties aanroepen. Iedere lees- of schrijfactie controleert de groepscode. Beheeracties controleren apart de beheerderscode.
-
-Voor een vakantiegroep is dit een praktisch toegangsmodel. Gebruik voor gevoelige of persoonlijke gegevens volwaardige gebruikersaccounts in plaats van een gedeelde code.
+De tabellen zijn niet direct toegankelijk voor publieke websitegebruikers. De webapp roept uitsluitend vooraf gedefinieerde databasefuncties aan. Lezen en potjes toevoegen zijn openbaar; spelersbeheer, correcties en verwijderingen controleren de beheerderscode.
