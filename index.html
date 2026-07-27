@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Gedeelde Big Two-vakantiestand met potjes, overwinningen en strafpunten.">
+  <title>Big Two Vakantiestand</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Vakantiecompetitie</p>
+      <h1 id="group-title">Big Two</h1>
+    </div>
+    <button id="refresh-button" class="icon-button" type="button" aria-label="Vernieuwen" title="Vernieuwen">↻</button>
+  </header>
+
+  <div id="mode-banner" class="mode-banner" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <main class="app-shell">
+    <section id="view-dashboard" class="view active" aria-labelledby="tab-dashboard">
+      <div class="summary-grid">
+        <article class="summary-card">
+          <span>Potjes</span>
+          <strong id="total-games">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Spelers</span>
+          <strong id="total-players">0</strong>
+        </article>
+        <article class="summary-card leader-card">
+          <span>Koploper</span>
+          <strong id="leader-name">–</strong>
+          <small id="leader-detail">Nog geen uitslagen</small>
+        </article>
+      </div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Ranglijst</p>
+            <h2>Stand</h2>
+          </div>
+          <span class="muted">1 winst = 1 punt</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Speler</th>
+                <th>Punten</th>
+                <th>Potjes</th>
+                <th>Winst%</th>
+                <th>Straf</th>
+                <th>Gem.</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Laatste uitslagen</p>
+            <h2>Recente potjes</h2>
+          </div>
+        </div>
+        <div id="recent-games" class="game-list empty-state">Nog geen potjes ingevoerd.</div>
+      </section>
+    </section>
+
+    <section id="view-entry" class="view" aria-labelledby="tab-entry">
+      <form id="game-form" class="panel form-panel" novalidate>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Nieuwe uitslag</p>
+            <h2>Potje invoeren</h2>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>1. Wie speelden mee?</legend>
+          <p class="field-help">Tik alle deelnemers aan.</p>
+          <div id="participant-chips" class="chip-grid"></div>
+        </fieldset>
+
+        <div class="form-grid two-columns">
+          <label>
+            <span>2. Wie heeft gewonnen?</span>
+            <select id="winner-select" required disabled>
+              <option value="">Selecteer eerst spelers</option>
+            </select>
+          </label>
+          <label>
+            <span>Wie voert dit in?</span>
+            <select id="entered-by-select" required disabled>
+              <option value="">Selecteer eerst spelers</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset id="cards-fieldset" disabled>
+          <legend>3. Overgebleven kaarten</legend>
+          <p class="field-help">De winnaar krijgt automatisch 0. Strafpunten worden automatisch berekend.</p>
+          <div id="cards-inputs" class="score-inputs"></div>
+        </fieldset>
+
+        <label>
+          <span>Opmerking <small>(optioneel)</small></span>
+          <input id="game-note" type="text" maxlength="160" placeholder="Bijvoorbeeld: revanchepotje">
+        </label>
+
+        <div id="game-validation" class="validation-message" hidden></div>
+        <button class="primary-button" type="submit">Potje opslaan</button>
+      </form>
+    </section>
+
+    <section id="view-history" class="view" aria-labelledby="tab-history">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Archief</p>
+            <h2>Alle potjes</h2>
+          </div>
+          <button id="export-button" class="secondary-button" type="button">CSV exporteren</button>
+        </div>
+        <div id="history-games" class="game-list empty-state">Nog geen potjes ingevoerd.</div>
+      </section>
+    </section>
+
+    <section id="view-admin" class="view" aria-labelledby="tab-admin">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Beheer</p>
+            <h2>Spelers</h2>
+          </div>
+        </div>
+        <form id="add-player-form" class="inline-form">
+          <label class="grow">
+            <span>Nieuwe speler</span>
+            <input id="new-player-name" type="text" maxlength="40" autocomplete="off" placeholder="Naam">
+          </label>
+          <button class="primary-button compact" type="submit">Toevoegen</button>
+        </form>
+        <div id="admin-player-list" class="admin-list"></div>
+      </section>
+
+      <section class="panel setup-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Puntentelling</p>
+            <h2>Actieve regels</h2>
+          </div>
+        </div>
+        <ul class="rule-list">
+          <li><strong>Winst:</strong> 1 competitiepunt.</li>
+          <li><strong>1–9 kaarten:</strong> 1 strafpunt per kaart.</li>
+          <li><strong>10–12 kaarten:</strong> dubbele strafpunten.</li>
+          <li><strong>13 kaarten:</strong> driedubbel, dus 39 strafpunten.</li>
+          <li><strong>Rangschikking:</strong> punten, winstpercentage, daarna laagste gemiddelde straf.</li>
+        </ul>
+      </section>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+    <button id="tab-dashboard" class="nav-button active" data-view="dashboard" type="button"><span>▦</span>Stand</button>
+    <button id="tab-entry" class="nav-button accent" data-view="entry" type="button"><span>＋</span>Invoeren</button>
+    <button id="tab-history" class="nav-button" data-view="history" type="button"><span>☷</span>Historie</button>
+    <button id="tab-admin" class="nav-button" data-view="admin" type="button"><span>⚙</span>Beheer</button>
+  </nav>
+
+  <dialog id="pin-dialog">
+    <form id="pin-form" method="dialog" class="dialog-card">
+      <p class="eyebrow">Toegang</p>
+      <h2>Vul de groepscode in</h2>
+      <p>Deze code is voor iedereen in de vakantiegroep hetzelfde.</p>
+      <label>
+        <span>Groepscode</span>
+        <input id="pin-input" type="password" inputmode="numeric" autocomplete="current-password" required>
+      </label>
+      <div id="pin-error" class="validation-message" hidden></div>
+      <button class="primary-button" value="default" type="submit">Openen</button>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog" class="dialog-card">
+      <p class="eyebrow">Bevestigen</p>
+      <h2 id="confirm-title">Weet je het zeker?</h2>
+      <p id="confirm-text"></p>
+      <div class="dialog-actions">
+        <button class="secondary-button" value="cancel">Annuleren</button>
+        <button class="danger-button" value="confirm">Bevestigen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
