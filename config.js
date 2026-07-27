@@ -9,8 +9,8 @@
  * 3. Zet demoMode op false.
  */
 window.BIG2_CONFIG = {
-  demoMode: true,
-  supabaseUrl: "https://JOUW-PROJECT.supabase.co",
-  supabasePublishableKey: "JOUW-PUBLISHABLE-KEY",
-  groupSlug: "vakantie-2026"
+  demoMode: false,
+  supabaseUrl: "https://melhccifejqitmxnbtty.supabase.co",
+  supabasePublishableKey: "sb_publishable__uPtm87N7PE4uy2K7Zm-vA_-WwJd5Tc",
+  groupSlug: "big2-vakantie-2026"
 };
