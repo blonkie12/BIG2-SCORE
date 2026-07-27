@@ -260,9 +260,13 @@
         currentActorKey = value;
         localStorage.setItem(actorStorageKey(), currentActorKey);
         elements.identityDialog.close();
+      };
+      // Escape sluit een modaal venster zonder submit. Zonder deze afhandeling blijft deze
+      // belofte openstaan en komt de rest van het opstarten nooit aan de beurt.
+      elements.identityDialog.addEventListener("close", () => {
         updateCurrentUserButton();
         resolve(currentActor());
-      };
+      }, { once: true });
     });
   }
 
@@ -281,8 +285,10 @@
   async function ensureLoaded() {
     try {
       state = normalizeState(await backend.bootstrap());
+      // Toon de stand meteen. De vraag wie de site gebruikt mag het scherm niet blokkeren.
+      renderAll();
       const actor = await requestIdentity(false);
-      await logAccessOnce(actor, false);
+      if (actor) await logAccessOnce(actor, false);
       renderAll();
     } catch (error) {
       showToast(error.message, true);
@@ -505,7 +511,9 @@
   }
 
   async function requireActor() {
-    return currentActor() || await requestIdentity(false);
+    const actor = currentActor() || await requestIdentity(false);
+    if (!actor) throw new Error("Kies eerst bovenaan de pagina wie de site gebruikt.");
+    return actor;
   }
 
   async function askAdminPin() {
@@ -641,6 +649,14 @@
     } catch (error) { showToast(error.message, true); }
   }
 
+  // Excel en Google Sheets voeren een cel uit als formule wanneer die met =, +, - of @
+  // begint. Opmerkingen en namen zijn vrije tekst, dus die krijgen een apostrof ervoor.
+  function csvCell(value) {
+    const text = String(value ?? "");
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${safe.replaceAll('"', '""')}"`;
+  }
+
   function exportCsv() {
     const games = filteredHistoryGames();
     if (!games.length) return showToast("Er zijn geen potjes in deze periode om te exporteren.", true);
@@ -649,7 +665,7 @@
       game.played_at || game.created_at, playerName(game.winner), playerName(game.entered_by), playerName(entry.player_id), entry.cards,
       entry.penalty ?? scorePenalty(entry.cards), game.note || ""
     ]));
-    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n");
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
     const range = historyStart || historyEnd ? `${historyStart || "begin"}-${historyEnd || "heden"}` : new Date().toISOString().slice(0, 10);
@@ -689,6 +705,7 @@
     elements.currentUserButton.addEventListener("click", async () => {
       try {
         const actor = await requestIdentity(true);
+        if (!actor) return;
         await logAccessOnce(actor, true);
         renderAll(); showToast(`Actief als ${actor.name}.`);
       } catch (error) { showToast(error.message, true); }

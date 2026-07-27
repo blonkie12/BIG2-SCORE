@@ -141,14 +141,17 @@ begin
   if v_count < 2 or v_count > 8 or v_count <> v_unique then raise exception 'Selecteer 2 tot 8 unieke spelers'; end if;
   v_max_cards := ceil(52.0 / v_count);
 
-  select count(*) filter (where e.cards < 0 or e.cards > v_max_cards)
+  -- Null-waarden worden hier expliciet geweigerd. Een vergelijking met null levert null op
+  -- in plaats van waar of onwaar, waardoor een ontbrekend kaartenaantal anders ongemerkt
+  -- alle onderstaande controles passeert en als nul strafpunten in de stand terechtkomt.
+  select count(*) filter (where e.player_id is null or e.cards is null or e.cards < 0 or e.cards > v_max_cards)
   into v_invalid
   from jsonb_to_recordset(p_entries) as e(player_id uuid, cards integer);
 
   if v_invalid > 0 or v_winner_rows <> 1 then raise exception 'Ongeldige kaartenaantallen of winnaar'; end if;
   if exists (
     select 1 from jsonb_to_recordset(p_entries) as e(player_id uuid, cards integer)
-    where e.player_id <> p_winner and (e.cards < 1 or e.cards > v_max_cards)
+    where e.player_id <> p_winner and (e.cards is null or e.cards < 1 or e.cards > v_max_cards)
   ) then raise exception 'Verliezers moeten 1 tot % kaarten hebben', v_max_cards; end if;
   if exists (
     select 1
@@ -234,7 +237,19 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_group_id uuid;
 begin
   v_group_id := public.big2_public_group_id(p_slug);
-  perform public.big2_write_log(v_group_id, p_actor_id, p_actor_name, 'site_access', 'site', null, '{}'::jsonb);
+
+  -- Hoogstens één bezoekregel per gebruiker per tien minuten. Deze functie is openbaar,
+  -- dus zonder deze controle kan het logboek onbeperkt worden volgeschreven.
+  if not exists (
+    select 1 from public.big2_audit_logs
+    where group_id = v_group_id
+      and action = 'site_access'
+      and actor_player_id is not distinct from p_actor_id
+      and created_at > now() - interval '10 minutes'
+  ) then
+    perform public.big2_write_log(v_group_id, p_actor_id, p_actor_name, 'site_access', 'site', null, '{}'::jsonb);
+  end if;
+
   return public.big2_state(v_group_id);
 end;
 $$;
@@ -250,6 +265,16 @@ declare
   v_game public.big2_games%rowtype;
 begin
   v_group_id := public.big2_public_group_id(p_slug);
+
+  -- Iedereen met de link mag potjes toevoegen, dus staat hier een eenvoudige rem tegen
+  -- geautomatiseerd volschrijven van de database. Normaal gebruik haalt deze grens nooit.
+  if (
+    select count(*) from public.big2_games
+    where group_id = v_group_id and created_at > now() - interval '1 minute'
+  ) >= 20 then
+    raise exception 'Er zijn zojuist veel potjes achter elkaar ingevoerd. Probeer het over een minuut opnieuw.';
+  end if;
+
   v_normalized := public.big2_normalize_entries(v_group_id, p_winner, p_entries, true);
 
   if not exists (
@@ -285,6 +310,21 @@ begin
   if not found then raise exception 'Potje niet gevonden'; end if;
 
   v_normalized := public.big2_normalize_entries(v_group_id, p_winner, p_entries, false);
+
+  -- Een correctie wijzigt alleen winnaar, kaarten en opmerking. De website biedt geen knop
+  -- om deelnemers te wisselen, dus dat wordt hier ook op de server geweigerd.
+  if exists (
+    select (v->>'player_id')::uuid from jsonb_array_elements(v_normalized) v
+    except
+    select (v->>'player_id')::uuid from jsonb_array_elements(v_before.entries) v
+  ) or exists (
+    select (v->>'player_id')::uuid from jsonb_array_elements(v_before.entries) v
+    except
+    select (v->>'player_id')::uuid from jsonb_array_elements(v_normalized) v
+  ) then
+    raise exception 'De deelnemers van een potje kunnen niet worden gewijzigd. Verwijder het potje en voer het opnieuw in.';
+  end if;
+
   update public.big2_games
   set winner = p_winner, entries = v_normalized, note = nullif(trim(p_note), ''), updated_at = now()
   where id = p_game_id
@@ -414,15 +454,20 @@ grant execute on function public.big2_admin_delete_game(text,text,uuid,text,uuid
 
 -- Maak één groep aan. Verander naam, slug en beheerderscode vóór de eerste uitvoering.
 -- Bij een bestaande groep worden deze waarden niet overschreven.
+--
+-- BELANGRIJK: vul hieronder een eigen, lange beheerderscode in en zet die nooit in Git.
+-- Een pincode van vier cijfers is niet voldoende: er is geen limiet op het aantal
+-- pogingen, dus alle tienduizend mogelijkheden zijn in korte tijd te proberen.
 insert into public.big2_groups(slug, name, admin_pin_hash)
 values (
   'big2-vakantie-2026',
   'Big Two Vakantiestand 2026',
-  extensions.crypt('2004', extensions.gen_salt('bf'))
+  extensions.crypt('VERVANG-DEZE-CODE', extensions.gen_salt('bf', 12))
 )
 on conflict (slug) do nothing;
 
--- Een bestaande beheerderscode wijzigen:
+-- Een bestaande beheerderscode wijzigen. Voer dit ook uit wanneer de code ooit in Git
+-- heeft gestaan; het bovenstaande insert laat een bestaande groep bewust ongemoeid.
 -- update public.big2_groups
--- set admin_pin_hash = extensions.crypt('NIEUWE-CODE', extensions.gen_salt('bf'))
--- where slug = 'vakantie-2026';
+-- set admin_pin_hash = extensions.crypt('NIEUWE-LANGE-CODE', extensions.gen_salt('bf', 12))
+-- where slug = 'big2-vakantie-2026';

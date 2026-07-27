@@ -9,7 +9,9 @@ Mobiele webapp voor een gedeelde Big Two-vakantiecompetitie. De interface draait
 - De beheerder voegt de spelerslijst toe met de beheerderscode.
 - Alle namen kunnen in één keer worden geplakt: één naam per regel of gescheiden door komma’s.
 - Alleen de beheerderscode kan spelers toevoegen, activeren/deactiveren en potjes aanpassen of verwijderen.
-- De standaard beheerderscode in `supabase/setup.sql` is `9876`. Wijzig deze vóór ingebruikname.
+- `supabase/setup.sql` bevat geen echte beheerderscode, maar de plaatshouder `VERVANG-DEZE-CODE`. Vul vóór de eerste uitvoering een eigen code in.
+- Kies een lange code en geen pincode van vier cijfers. Er is geen limiet op het aantal pogingen, dus tienduizend mogelijkheden zijn snel te proberen.
+- Zet de echte code nooit in GitHub. Wie de repository kan lezen, kan anders potjes aanpassen en verwijderen. Heeft een code ooit in Git gestaan, wijzig die dan in Supabase met het `update`-commando onderaan `setup.sql`.
 
 Omdat er geen groepscode is, is de inhoud van de website zichtbaar voor iedereen die de GitHub Pages-link kent.
 
@@ -83,7 +85,7 @@ Gebruik uitsluitend de **Publishable key** in de website. Plaats nooit een `serv
 
 1. Upload de bestanden naar de hoofdmap van de repository.
 2. Overschrijf bij deze interface-update `index.html`, `app.js`, `styles.css`, `sw.js` en eventueel `README.md`.
-3. Voor de historie- en PDF-functie hoeft `supabase/setup.sql` niet opnieuw te worden uitgevoerd.
+3. Voer bij deze update `supabase/setup.sql` wél opnieuw uit: de controles op ingevoerde uitslagen en op het logboek zijn gewijzigd. Het script kan veilig opnieuw worden uitgevoerd en laat bestaande gegevens ongemoeid.
 4. Ga naar **Settings > Pages**.
 5. Gebruik `main` en `/ (root)` als publicatiebron.
 6. Herlaad de website na publicatie.
