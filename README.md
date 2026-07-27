@@ -30,6 +30,12 @@ Bij drie spelers kan iedere speler maximaal 18 kaarten hebben. De invoergrens wo
 - 10–12 kaarten: dubbele strafpunten;
 - 13 kaarten of meer: altijd 39 strafpunten.
 
+## Historie en PDF-rapport
+
+Op de pagina **Historie** kan een begin- en einddatum worden gekozen. De website berekent vervolgens opnieuw de ranglijst, gemiddelde strafpunten, overwinningen en het aantal gespeelde potjes over uitsluitend die periode. De kwalificatiegrens van 10 potjes geldt binnen de geselecteerde periode.
+
+De knoppen **CSV exporteren** en **PDF opslaan** gebruiken dezelfde geselecteerde periode. **PDF opslaan** opent het afdrukvenster van de browser; kies daar **Opslaan als PDF**. Hiervoor is geen wijziging in Supabase nodig.
+
 ## Logboek
 
 De website vraagt bij het openen wie de site gebruikt. De gekozen naam wordt lokaal onthouden en kan bovenaan worden gewijzigd.
@@ -76,8 +82,8 @@ Gebruik uitsluitend de **Publishable key** in de website. Plaats nooit een `serv
 ## Publiceren of bijwerken op GitHub Pages
 
 1. Upload de bestanden naar de hoofdmap van de repository.
-2. Overschrijf bij een update in ieder geval `index.html`, `app.js`, `styles.css`, `sw.js`, `README.md` en `supabase/setup.sql`.
-3. Voer daarna het nieuwe `supabase/setup.sql` volledig uit in Supabase.
+2. Overschrijf bij deze interface-update `index.html`, `app.js`, `styles.css`, `sw.js` en eventueel `README.md`.
+3. Voor de historie- en PDF-functie hoeft `supabase/setup.sql` niet opnieuw te worden uitgevoerd.
 4. Ga naar **Settings > Pages**.
 5. Gebruik `main` en `/ (root)` als publicatiebron.
 6. Herlaad de website na publicatie.

@@ -127,13 +127,83 @@
     </section>
 
     <section id="view-history" class="view" aria-labelledby="tab-history">
-      <section class="panel">
+      <section class="panel history-panel">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Archief</p>
-            <h2>Alle potjes</h2>
+            <h2>Historie en periodestand</h2>
           </div>
-          <button id="export-button" class="secondary-button" type="button">CSV exporteren</button>
+          <div class="history-export-actions no-print">
+            <button id="export-button" class="secondary-button" type="button">CSV exporteren</button>
+            <button id="history-pdf-button" class="secondary-button" type="button">PDF opslaan</button>
+          </div>
+        </div>
+
+        <form id="history-filter-form" class="history-filter no-print">
+          <label>
+            <span>Begindatum</span>
+            <input id="history-start-date" type="date">
+          </label>
+          <label>
+            <span>Einddatum</span>
+            <input id="history-end-date" type="date">
+          </label>
+          <button class="primary-button compact" type="submit">Periode tonen</button>
+          <button id="history-clear-button" class="secondary-button" type="button">Alles tonen</button>
+        </form>
+
+        <div id="history-print-header" class="print-only">
+          <p class="eyebrow">Big Two-rapport</p>
+          <h1 id="history-print-title">Periodestand</h1>
+          <p id="history-print-meta"></p>
+        </div>
+
+        <div class="history-period-summary">
+          <div>
+            <span>Geselecteerde periode</span>
+            <strong id="history-period-label">Alle gespeelde potjes</strong>
+          </div>
+          <div>
+            <span>Aantal potjes</span>
+            <strong id="history-game-count">0</strong>
+          </div>
+          <div>
+            <span>Actieve spelers</span>
+            <strong id="history-player-count">0</strong>
+          </div>
+        </div>
+
+        <section class="period-ranking-section">
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="eyebrow">Stand over de periode</p>
+              <h3>Ranglijst</h3>
+            </div>
+            <span class="muted">Vanaf 10 potjes binnen de gekozen periode</span>
+          </div>
+          <div class="table-wrap period-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Speler</th>
+                  <th>Gem. straf</th>
+                  <th>Potjes</th>
+                  <th>Gewonnen</th>
+                  <th>Winst%</th>
+                  <th>Straf totaal</th>
+                </tr>
+              </thead>
+              <tbody id="history-ranking-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="history-list-heading">
+          <div>
+            <p class="eyebrow">Potjes in selectie</p>
+            <h3>Uitslagen</h3>
+          </div>
         </div>
         <div id="history-games" class="game-list empty-state">Nog geen potjes ingevoerd.</div>
       </section>

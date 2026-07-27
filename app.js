@@ -15,6 +15,10 @@
     participantChips: $("#participant-chips"), winnerSelect: $("#winner-select"), enteredBySelect: $("#entered-by-select"),
     cardsFieldset: $("#cards-fieldset"), cardsInputs: $("#cards-inputs"), gameForm: $("#game-form"), gameNote: $("#game-note"),
     gameValidation: $("#game-validation"), exportButton: $("#export-button"),
+    historyPdfButton: $("#history-pdf-button"), historyFilterForm: $("#history-filter-form"),
+    historyStartDate: $("#history-start-date"), historyEndDate: $("#history-end-date"), historyClearButton: $("#history-clear-button"),
+    historyPeriodLabel: $("#history-period-label"), historyGameCount: $("#history-game-count"), historyPlayerCount: $("#history-player-count"),
+    historyRankingBody: $("#history-ranking-body"), historyPrintTitle: $("#history-print-title"), historyPrintMeta: $("#history-print-meta"),
     addPlayerForm: $("#add-player-form"), newPlayerNames: $("#new-player-names"), adminPlayerList: $("#admin-player-list"),
     identityDialog: $("#identity-dialog"), identityForm: $("#identity-form"), identitySelect: $("#identity-select"),
     confirmDialog: $("#confirm-dialog"), confirmTitle: $("#confirm-title"), confirmText: $("#confirm-text"),
@@ -26,6 +30,8 @@
   let selectedPlayers = new Set();
   let currentActorKey = "";
   let editingGameId = "";
+  let historyStart = "";
+  let historyEnd = "";
   let backend;
 
   const escapeHtml = (value) => String(value ?? "")
@@ -41,6 +47,16 @@
   const formatLogDate = (iso) => new Intl.DateTimeFormat("nl-NL", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"
   }).format(new Date(iso));
+  const dateKey = (iso) => {
+    const date = new Date(iso);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const formatFilterDate = (value) => value
+    ? new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${value}T12:00:00`))
+    : "";
 
   function normalizeState(next) {
     return {
@@ -274,11 +290,11 @@
     }
   }
 
-  function getStats() {
+  function getStats(games = state.games) {
     const stats = new Map(state.players.map((player) => [player.id, {
       id: player.id, name: player.name, active: player.active, games: 0, wins: 0, penalties: 0
     }]));
-    for (const game of state.games) {
+    for (const game of games) {
       for (const entry of game.entries || []) {
         const row = stats.get(entry.player_id);
         if (!row) continue;
@@ -302,19 +318,9 @@
     });
   }
 
-  function renderDashboard() {
-    const stats = getStats();
-    const qualified = stats.filter((row) => row.qualified);
-    elements.totalGames.textContent = state.games.length;
-    elements.totalPlayers.textContent = state.players.filter((p) => p.active).length;
-    const leader = qualified[0];
-    elements.leaderName.textContent = leader?.name || "–";
-    elements.leaderDetail.textContent = leader
-      ? `${leader.averagePenalty.toFixed(1)} gem. straf · ${leader.games} potjes`
-      : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
-
+  function rankingRowsHtml(stats, emptyMessage = "Voeg eerst spelers toe.") {
     let officialPosition = 0;
-    elements.rankingBody.innerHTML = stats.map((row) => {
+    return stats.map((row) => {
       let position = "–";
       if (row.qualified) {
         officialPosition += 1;
@@ -328,7 +334,21 @@
         <td><strong>${row.games ? row.averagePenalty.toFixed(1) : "–"}</strong></td>
         <td>${row.games}</td><td>${row.wins}</td><td>${(row.winRate * 100).toFixed(0)}%</td><td>${row.penalties}</td>
       </tr>`;
-    }).join("") || '<tr><td colspan="7" class="empty-state">Voeg eerst spelers toe.</td></tr>';
+    }).join("") || `<tr><td colspan="7" class="empty-state">${escapeHtml(emptyMessage)}</td></tr>`;
+  }
+
+  function renderDashboard() {
+    const stats = getStats();
+    const qualified = stats.filter((row) => row.qualified);
+    elements.totalGames.textContent = state.games.length;
+    elements.totalPlayers.textContent = state.players.filter((p) => p.active).length;
+    const leader = qualified[0];
+    elements.leaderName.textContent = leader?.name || "–";
+    elements.leaderDetail.textContent = leader
+      ? `${leader.averagePenalty.toFixed(1)} gem. straf · ${leader.games} potjes`
+      : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
+
+    elements.rankingBody.innerHTML = rankingRowsHtml(stats);
 
     renderGameList(elements.recentGames, state.games.slice(0, 5), false);
   }
@@ -351,6 +371,60 @@
   function renderGameList(container, games, allowActions) {
     container.classList.toggle("empty-state", games.length === 0);
     container.innerHTML = games.length ? games.map((game) => gameCard(game, allowActions)).join("") : "Nog geen potjes ingevoerd.";
+  }
+
+  function filteredHistoryGames() {
+    return state.games.filter((game) => {
+      const played = dateKey(game.played_at || game.created_at);
+      return (!historyStart || played >= historyStart) && (!historyEnd || played <= historyEnd);
+    });
+  }
+
+  function historyPeriodText() {
+    if (historyStart && historyEnd) return `${formatFilterDate(historyStart)} t/m ${formatFilterDate(historyEnd)}`;
+    if (historyStart) return `Vanaf ${formatFilterDate(historyStart)}`;
+    if (historyEnd) return `Tot en met ${formatFilterDate(historyEnd)}`;
+    return "Alle gespeelde potjes";
+  }
+
+  function renderHistory() {
+    const games = filteredHistoryGames();
+    const stats = getStats(games).filter((row) => row.games > 0);
+    elements.historyPeriodLabel.textContent = historyPeriodText();
+    elements.historyGameCount.textContent = games.length;
+    elements.historyPlayerCount.textContent = stats.length;
+    elements.historyRankingBody.innerHTML = rankingRowsHtml(stats, "Geen spelers in deze periode.");
+    elements.historyPrintTitle.textContent = `${state.group?.name || "Big Two"} – periodestand`;
+    elements.historyPrintMeta.textContent = `${historyPeriodText()} · ${games.length} potje${games.length === 1 ? "" : "s"} · rapport gemaakt op ${formatLogDate(new Date().toISOString())}`;
+    renderGameList(elements.historyGames, games, true);
+  }
+
+  function applyHistoryFilter(event) {
+    event?.preventDefault();
+    const start = elements.historyStartDate.value;
+    const end = elements.historyEndDate.value;
+    if (start && end && start > end) {
+      showToast("De begindatum mag niet na de einddatum liggen.", true);
+      return;
+    }
+    historyStart = start;
+    historyEnd = end;
+    renderHistory();
+  }
+
+  function clearHistoryFilter() {
+    historyStart = "";
+    historyEnd = "";
+    elements.historyStartDate.value = "";
+    elements.historyEndDate.value = "";
+    renderHistory();
+  }
+
+  function printHistoryReport() {
+    const games = filteredHistoryGames();
+    if (!games.length) return showToast("Er zijn geen potjes in deze periode om als PDF op te slaan.", true);
+    document.body.classList.add("printing-history");
+    window.print();
   }
 
   function renderEntry() {
@@ -427,7 +501,7 @@
   function renderAll() {
     elements.groupTitle.textContent = state.group?.name || "Big Two Vakantiestand";
     updateCurrentUserButton();
-    renderDashboard(); renderEntry(); renderGameList(elements.historyGames, state.games, true); renderLogbook(); renderAdmin();
+    renderDashboard(); renderEntry(); renderHistory(); renderLogbook(); renderAdmin();
   }
 
   async function requireActor() {
@@ -568,15 +642,18 @@
   }
 
   function exportCsv() {
+    const games = filteredHistoryGames();
+    if (!games.length) return showToast("Er zijn geen potjes in deze periode om te exporteren.", true);
     const header = ["datum", "winnaar", "ingevoerd_door", "speler", "kaarten_over", "strafpunten", "opmerking"];
-    const rows = state.games.flatMap((game) => (game.entries || []).map((entry) => [
+    const rows = games.flatMap((game) => (game.entries || []).map((entry) => [
       game.played_at || game.created_at, playerName(game.winner), playerName(game.entered_by), playerName(entry.player_id), entry.cards,
       entry.penalty ?? scorePenalty(entry.cards), game.note || ""
     ]));
     const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = `big2-uitslagen-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+    const range = historyStart || historyEnd ? `${historyStart || "begin"}-${historyEnd || "heden"}` : new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = `big2-uitslagen-${range}.csv`; a.click(); URL.revokeObjectURL(url);
   }
 
   function switchView(name) {
@@ -604,6 +681,10 @@
     elements.editWinnerSelect.addEventListener("change", renderEditInputs);
     elements.editGameForm.addEventListener("submit", handleEditSubmit);
     elements.exportButton.addEventListener("click", exportCsv);
+    elements.historyPdfButton.addEventListener("click", printHistoryReport);
+    elements.historyFilterForm.addEventListener("submit", applyHistoryFilter);
+    elements.historyClearButton.addEventListener("click", clearHistoryFilter);
+    window.addEventListener("afterprint", () => document.body.classList.remove("printing-history"));
     elements.refreshButton.addEventListener("click", () => ensureLoaded());
     elements.currentUserButton.addEventListener("click", async () => {
       try {
