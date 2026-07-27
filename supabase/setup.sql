@@ -416,7 +416,7 @@ grant execute on function public.big2_admin_delete_game(text,text,uuid,text,uuid
 -- Bij een bestaande groep worden deze waarden niet overschreven.
 insert into public.big2_groups(slug, name, admin_pin_hash)
 values (
-  'vakantie-2026',
+  'big2-vakantie-2026',
   'Big Two Vakantiestand 2026',
   extensions.crypt('2004', extensions.gen_salt('bf'))
 )
