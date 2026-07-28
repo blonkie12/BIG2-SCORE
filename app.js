@@ -36,7 +36,10 @@
     editGameDialog: $("#edit-game-dialog"), editGameForm: $("#edit-game-form"),
     editParticipantChips: $("#edit-participant-chips"), editWinnerSelect: $("#edit-winner-select"),
     editEnteredBySelect: $("#edit-entered-by-select"), editCardsInputs: $("#edit-cards-inputs"),
-    editGameNote: $("#edit-game-note"), editGameValidation: $("#edit-game-validation")
+    editGameNote: $("#edit-game-note"), editGameValidation: $("#edit-game-validation"),
+    playerHistoryDialog: $("#player-history-dialog"), playerHistoryName: $("#player-history-name"),
+    playerHistoryStatus: $("#player-history-status"), playerHistorySummary: $("#player-history-summary"),
+    playerHistoryCount: $("#player-history-count"), playerHistoryGames: $("#player-history-games")
   };
 
   let state = { group: { name: "Big Two Vakantiestand" }, players: [], games: [], logs: [] };
@@ -432,11 +435,83 @@
       const inactiveTag = row.active ? "" : '<span class="inactive-tag">inactief</span>';
       return `<tr class="${row.qualified ? "qualified-row" : "unqualified-row"}">
         <td class="position-medal">${position}</td>
-        <td><span class="player-name">${escapeHtml(row.name)}</span>${qualificationTag}${inactiveTag}</td>
+        <td><button class="player-name player-history-button" type="button" data-player-history="${row.id}" aria-label="Bekijk spelgeschiedenis van ${escapeHtml(row.name)}">${escapeHtml(row.name)}</button>${qualificationTag}${inactiveTag}</td>
         <td><strong>${row.games ? row.averagePenalty.toFixed(1) : "–"}</strong></td>
         <td>${row.games}</td><td>${row.wins}</td><td>${(row.winRate * 100).toFixed(0)}%</td><td>${row.penalties}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="7" class="empty-state">${escapeHtml(emptyMessage)}</td></tr>`;
+  }
+
+  function playerHistoryGameHtml(game, playerId) {
+    const entry = (game.entries || []).find((item) => item.player_id === playerId);
+    if (!entry) return "";
+    const won = game.winner === playerId;
+    const penalty = Number(entry.penalty ?? scorePenalty(Number(entry.cards)));
+    const opponents = (game.entries || [])
+      .filter((item) => item.player_id !== playerId)
+      .map((item) => playerName(item.player_id))
+      .join(", ");
+    const allScores = [...(game.entries || [])]
+      .sort((a, b) => (a.player_id === game.winner ? -1 : b.player_id === game.winner ? 1 : a.cards - b.cards))
+      .map((item) => {
+        const isSelected = item.player_id === playerId;
+        const isWinner = item.player_id === game.winner;
+        return `<span class="score-pill ${isWinner ? "winner" : ""} ${isSelected ? "selected-player-score" : ""}">${escapeHtml(playerName(item.player_id))}: ${item.cards} kaart${item.cards === 1 ? "" : "en"}${isWinner ? " · winnaar" : ` · ${item.penalty ?? scorePenalty(item.cards)} straf`}</span>`;
+      }).join("");
+    const edited = game.updated_at ? ` · aangepast ${formatDate(game.updated_at)}` : "";
+    return `<article class="player-history-game ${won ? "won" : "lost"}">
+      <div class="player-history-game-head">
+        <div>
+          <strong>${won ? "🏆 Gewonnen" : "Verloren"}</strong>
+          <span>${formatDate(game.played_at || game.created_at)}${edited}</span>
+        </div>
+        <div class="player-result-score">
+          <strong>${won ? "0" : penalty}</strong>
+          <span>${won ? "strafpunten" : `strafpunt${penalty === 1 ? "" : "en"}`}</span>
+        </div>
+      </div>
+      <p class="player-history-meta">${entry.cards} kaart${entry.cards === 1 ? "" : "en"} over · tegen ${escapeHtml(opponents || "geen andere spelers")} · ingevoerd door ${escapeHtml(playerName(game.entered_by))}</p>
+      <div class="game-scores">${allScores}</div>
+      ${game.note ? `<p class="game-note">${escapeHtml(game.note)}</p>` : ""}
+    </article>`;
+  }
+
+  function openPlayerHistory(playerId) {
+    const player = playerById(playerId);
+    if (!player) return showToast("Speler niet gevonden.", true);
+    const playerGames = state.games
+      .filter((game) => (game.entries || []).some((entry) => entry.player_id === playerId))
+      .sort((a, b) => new Date(b.played_at || b.created_at) - new Date(a.played_at || a.created_at));
+    const stats = getStats(playerGames).find((row) => row.id === playerId) || {
+      games: 0, wins: 0, penalties: 0, winRate: 0, averagePenalty: 0, qualified: false, gamesNeeded: QUALIFYING_GAMES
+    };
+
+    elements.playerHistoryName.textContent = player.name;
+    const qualification = stats.qualified
+      ? "Officieel geklasseerd"
+      : stats.games
+        ? `Nog ${stats.gamesNeeded} potje${stats.gamesNeeded === 1 ? "" : "s"} tot officiële klassering`
+        : "Nog geen potjes gespeeld";
+    elements.playerHistoryStatus.textContent = `${player.active ? "Actieve speler" : "Inactieve speler"} · ${qualification}`;
+    elements.playerHistorySummary.innerHTML = `
+      <div class="player-history-stat"><span>Potjes</span><strong>${stats.games}</strong></div>
+      <div class="player-history-stat"><span>Gewonnen</span><strong>${stats.wins}</strong></div>
+      <div class="player-history-stat"><span>Winstpercentage</span><strong>${(stats.winRate * 100).toFixed(1)}%</strong></div>
+      <div class="player-history-stat"><span>Gem. straf</span><strong>${stats.games ? stats.averagePenalty.toFixed(1) : "–"}</strong></div>
+      <div class="player-history-stat"><span>Straf totaal</span><strong>${stats.penalties}</strong></div>`;
+    elements.playerHistoryCount.textContent = `${playerGames.length} potje${playerGames.length === 1 ? "" : "s"}`;
+    elements.playerHistoryGames.innerHTML = playerGames.length
+      ? playerGames.map((game) => playerHistoryGameHtml(game, playerId)).join("")
+      : '<p class="empty-state">Deze speler heeft nog geen potjes gespeeld.</p>';
+    elements.playerHistoryGames.classList.toggle("empty-state", !playerGames.length);
+    elements.playerHistoryDialog.showModal();
+  }
+
+  function handlePlayerHistoryClick(event) {
+    const button = event.target.closest("[data-player-history]");
+    if (!button) return false;
+    openPlayerHistory(button.dataset.playerHistory);
+    return true;
   }
 
   function renderDashboard() {
@@ -446,6 +521,9 @@
     elements.totalPlayers.textContent = state.players.filter((p) => p.active).length;
     const leader = qualified[0];
     elements.leaderName.textContent = leader?.name || "–";
+    elements.leaderName.disabled = !leader;
+    if (leader) elements.leaderName.dataset.playerHistory = leader.id;
+    else delete elements.leaderName.dataset.playerHistory;
     elements.leaderDetail.textContent = leader
       ? leaderDetailText(leader)
       : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
@@ -461,7 +539,7 @@
     const entries = [...(game.entries || [])].sort((a, b) => (a.player_id === game.winner ? -1 : b.player_id === game.winner ? 1 : a.cards - b.cards));
     const pills = entries.map((entry) => {
       const isWinner = entry.player_id === game.winner;
-      return `<span class="score-pill ${isWinner ? "winner" : ""}">${escapeHtml(playerName(entry.player_id))}: ${entry.cards} kaart${entry.cards === 1 ? "" : "en"}${isWinner ? " · winnaar" : ` · ${entry.penalty ?? scorePenalty(entry.cards)} straf`}</span>`;
+      return `<span class="score-pill ${isWinner ? "winner" : ""}"><button class="score-player-button" type="button" data-player-history="${entry.player_id}" aria-label="Bekijk spelgeschiedenis van ${escapeHtml(playerName(entry.player_id))}">${escapeHtml(playerName(entry.player_id))}</button>: ${entry.cards} kaart${entry.cards === 1 ? "" : "en"}${isWinner ? " · winnaar" : ` · ${entry.penalty ?? scorePenalty(entry.cards)} straf`}</span>`;
     }).join("");
     const edited = game.updated_at ? ` · aangepast ${formatDate(game.updated_at)}` : "";
     return `<article class="game-card">
@@ -857,6 +935,7 @@
   }
 
   async function handleHistoryClick(event) {
+    if (handlePlayerHistoryClick(event)) return;
     const editButton = event.target.closest("[data-edit-game]");
     if (editButton) return openEditGame(editButton.dataset.editGame);
     const deleteButton = event.target.closest("[data-delete-game]"); if (!deleteButton) return;
@@ -919,6 +998,10 @@
     elements.addPlayerForm.addEventListener("submit", handleAddPlayer);
     elements.rankingSettingsForm.addEventListener("submit", handleRankingSettings);
     elements.adminPlayerList.addEventListener("click", handleAdminClick);
+    elements.leaderName.addEventListener("click", handlePlayerHistoryClick);
+    elements.rankingBody.addEventListener("click", handlePlayerHistoryClick);
+    elements.historyRankingBody.addEventListener("click", handlePlayerHistoryClick);
+    elements.recentGames.addEventListener("click", handlePlayerHistoryClick);
     elements.historyGames.addEventListener("click", handleHistoryClick);
     elements.editParticipantChips.addEventListener("change", (event) => {
       const checkbox = event.target.closest('input[type="checkbox"]');

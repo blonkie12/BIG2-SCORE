@@ -38,7 +38,7 @@
         </article>
         <article class="summary-card leader-card">
           <span>Koploper</span>
-          <strong id="leader-name">–</strong>
+          <button id="leader-name" class="leader-name-button" type="button" disabled>–</button>
           <small id="leader-detail">Nog geen uitslagen</small>
         </article>
       </div>
@@ -444,6 +444,32 @@
         <button class="primary-button compact" type="submit">Wijziging opslaan</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="player-history-dialog" class="wide-dialog">
+    <div class="dialog-card player-history-dialog-card">
+      <div class="player-history-header">
+        <div>
+          <p class="eyebrow">Spelersprofiel</p>
+          <h2 id="player-history-name">Spelgeschiedenis</h2>
+          <p id="player-history-status" class="player-history-status"></p>
+        </div>
+        <form method="dialog">
+          <button class="icon-button player-history-close" type="submit" aria-label="Sluiten" title="Sluiten">×</button>
+        </form>
+      </div>
+
+      <div id="player-history-summary" class="player-history-summary"></div>
+
+      <div class="player-history-section-heading">
+        <div>
+          <p class="eyebrow">Alle gespeelde potjes</p>
+          <h3>Uitslagen</h3>
+        </div>
+        <span id="player-history-count" class="muted"></span>
+      </div>
+      <div id="player-history-games" class="player-history-list empty-state">Nog geen potjes gespeeld.</div>
+    </div>
   </dialog>
 
   <dialog id="confirm-dialog">
