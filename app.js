@@ -63,7 +63,8 @@
   const uuid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const scorePenalty = (cards) => cards >= 13 ? 39 : cards >= 10 ? cards * 2 : cards;
   const maxCardsForPlayerCount = (playerCount) => Math.ceil(52 / Math.max(1, playerCount));
-  const playerById = (id) => state.players.find((player) => player.id === id);
+  const sameId = (a, b) => String(a ?? "") === String(b ?? "");
+  const playerById = (id) => state.players.find((player) => sameId(player.id, id));
   const playerName = (id) => playerById(id)?.name || "Onbekend";
   const formatDate = (iso) => new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
   const formatLogDate = (iso) => new Intl.DateTimeFormat("nl-NL", {
@@ -466,7 +467,7 @@
     const opponents = new Map();
     for (const game of playerGames) {
       for (const entry of game.entries || []) {
-        if (entry.player_id === playerId) continue;
+        if (sameId(entry.player_id, playerId)) continue;
         const opponent = playerById(entry.player_id);
         if (!opponent) continue;
         if (!opponents.has(opponent.id)) {
@@ -483,8 +484,8 @@
         const row = opponents.get(opponent.id);
         row.games += 1;
         row.penalties += Number(entry.penalty ?? scorePenalty(Number(entry.cards)));
-        if (game.winner === opponent.id) row.wins += 1;
-        if (game.winner === playerId) row.selectedPlayerWins += 1;
+        if (sameId(game.winner, opponent.id)) row.wins += 1;
+        if (sameId(game.winner, playerId)) row.selectedPlayerWins += 1;
       }
     }
     return [...opponents.values()].map((row) => ({
@@ -1141,7 +1142,7 @@
   async function init() {
     try { setupMode(); bindEvents(); await ensureLoaded(); }
     catch (error) { elements.modeBanner.hidden = false; elements.modeBanner.textContent = error.message; showToast(error.message, true); }
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=16", { updateViaCache: "none" }).catch(() => {});
   }
 
   init();
