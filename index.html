@@ -49,7 +49,7 @@
             <p class="eyebrow">Ranglijst</p>
             <h2>Stand</h2>
           </div>
-          <span class="muted">Vanaf 10 potjes · laagste gemiddelde straf bovenaan</span>
+          <span id="ranking-rule-label" class="muted">Vanaf 10 potjes · laagste gemiddelde straf bovenaan</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -75,8 +75,91 @@
             <p class="eyebrow">Laatste uitslagen</p>
             <h2>Recente potjes</h2>
           </div>
+          <span class="muted">Laatste 2 potjes</span>
         </div>
         <div id="recent-games" class="game-list empty-state">Nog geen potjes ingevoerd.</div>
+      </section>
+
+      <section class="panel game-rules-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Snel overzicht</p>
+            <h2>Spelregels</h2>
+          </div>
+          <span class="muted">Handrangschikking van hoog naar laag</span>
+        </div>
+
+        <figure class="hand-ranking-figure">
+          <img
+            src="big-two-handrangschikking.webp"
+            alt="Big Two handrangschikking van hoog naar laag, met kaartvolgorde, symboolvolgorde en de belangrijkste spelregels"
+            loading="lazy"
+            decoding="async"
+          >
+        </figure>
+
+        <details class="rules-details">
+          <summary>📖 Volledige spelregels tonen</summary>
+          <div class="rules-content">
+            <h3>1. Doel van het spel</h3>
+            <p>De speler die als eerste al zijn kaarten heeft weggespeeld, wint het potje.</p>
+
+            <h3>2. Schudden en delen</h3>
+            <p>De winnaar van het vorige potje is de dealer van het volgende potje. De dealer schudt en deelt de kaarten naar eigen inzicht. Bij het eerste potje bepalen de spelers onderling wie deelt.</p>
+
+            <h3>3. Aantal kaarten</h3>
+            <ul>
+              <li><strong>Vier spelers:</strong> iedere speler krijgt 13 kaarten.</li>
+              <li><strong>Drie spelers:</strong> de kaarten worden verdeeld als 17–17–18. De speler met 3♦ krijgt de achttiende kaart.</li>
+            </ul>
+
+            <h3>4. Begin van het potje</h3>
+            <p>De speler met 3♦ begint. De eerste kaart of combinatie hoeft de 3♦ niet te bevatten; deze kaart mag worden bewaard en later worden gespeeld.</p>
+
+            <h3>5. Kaart- en symboolvolgorde</h3>
+            <p><strong>Kaarten, laag naar hoog:</strong> 3–4–5–6–7–8–9–10–J–Q–K–A–2.</p>
+            <p><strong>Symbolen, laag naar hoog:</strong> ♦ ruiten – ♣ klaveren – ♥ harten – ♠ schoppen. De rode of zwarte kleur is niet belangrijk; alleen het symbool telt.</p>
+
+            <h3>6. Geldige combinaties</h3>
+            <ul>
+              <li><strong>Losse kaart:</strong> exact één kaart.</li>
+              <li><strong>Paar:</strong> exact twee kaarten met dezelfde waarde.</li>
+              <li><strong>Three of a kind:</strong> drie kaarten met dezelfde waarde plus twee willekeurige kaarten; samen vijf kaarten.</li>
+              <li><strong>Straight:</strong> vijf opeenvolgende kaarten. De symbolen mogen verschillen.</li>
+              <li><strong>Flush:</strong> vijf kaarten met hetzelfde symbool.</li>
+              <li><strong>Full house:</strong> drie kaarten met dezelfde waarde plus een paar.</li>
+              <li><strong>Four of a kind:</strong> vier kaarten met dezelfde waarde plus één willekeurige kaart.</li>
+              <li><strong>Straight flush:</strong> vijf opeenvolgende kaarten met hetzelfde symbool.</li>
+              <li><strong>Royal flush:</strong> J–Q–K–A–2 met hetzelfde symbool. Dit is de hoogste combinatie en eindigt altijd met een 2.</li>
+            </ul>
+
+            <h3>7. Volgorde van vijfkaartcombinaties</h3>
+            <p>Van laag naar hoog: three of a kind, straight, flush, full house, four of a kind, straight flush en royal flush.</p>
+
+            <h3>8. Gebruik van de 2 in een straight</h3>
+            <p>De 2 mag alleen als hoogste kaart worden gebruikt. J–Q–K–A–2 is toegestaan; A–2–3–4–5 en 2–3–4–5–6 zijn niet toegestaan.</p>
+
+            <h3>9. Een combinatie overtreffen</h3>
+            <p>Je speelt altijd hetzelfde aantal kaarten als de voorgaande speler: één kaart op één kaart, een paar op een paar en een vijfkaartcombinatie op een vijfkaartcombinatie. Bij vijf kaarten mag een hogere soort combinatie een lagere soort verslaan.</p>
+
+            <h3>10. Passen</h3>
+            <p>Wie past, mag in diezelfde slag niet meer meedoen. Wanneer alle andere actieve spelers hebben gepast, begint de speler die als laatste kaarten heeft gelegd een nieuwe slag met een geldige combinatie naar keuze.</p>
+
+            <h3>11. Einde van het potje en invoeren</h3>
+            <p>Het potje stopt zodra een speler geen kaarten meer heeft. De winnaar schudt en deelt direct het volgende potje. De uitslag mag door iedere deelnemer worden ingevoerd, ook door de winnaar.</p>
+
+            <h3>12. Strafpunten</h3>
+            <ul>
+              <li>0 kaarten: 0 strafpunten.</li>
+              <li>1–9 kaarten: 1 strafpunt per kaart.</li>
+              <li>10–12 kaarten: 2 strafpunten per kaart.</li>
+              <li>13 kaarten of meer: altijd maximaal 39 strafpunten.</li>
+            </ul>
+
+            <h3>13. Ranglijst</h3>
+            <p>Een speler telt vanaf 10 gespeelde potjes officieel mee. Spelers met minder dan 10 potjes blijven grijs weergegeven. De beheerder kiest welk criterium de ranglijst bepaalt: gemiddelde strafpunten, gewonnen potjes, winstpercentage, totaal strafpunten of gespeelde potjes.</p>
+          </div>
+        </details>
       </section>
     </section>
 
@@ -179,7 +262,7 @@
               <p class="eyebrow">Stand over de periode</p>
               <h3>Ranglijst</h3>
             </div>
-            <span class="muted">Vanaf 10 potjes binnen de gekozen periode</span>
+            <span id="history-ranking-rule-label" class="muted">Vanaf 10 potjes binnen de gekozen periode</span>
           </div>
           <div class="table-wrap period-table-wrap">
             <table>
@@ -218,7 +301,7 @@
           </div>
           <span class="muted">Bezoeken en wijzigingen</span>
         </div>
-        <p class="field-help">De naam is gebaseerd op de gebruiker die bovenaan de site is gekozen.</p>
+        <p class="field-help">De naam is gebaseerd op de gebruiker die bovenaan de site is gekozen. Die keuze wordt niet gecontroleerd: iedereen kan elke naam kiezen. Het logboek is bedoeld om samen terug te kijken, niet als sluitend identiteitsbewijs.</p>
         <div id="logbook-list" class="log-list empty-state">Nog geen logboekregels.</div>
       </section>
     </section>
@@ -236,7 +319,7 @@
             <span>Spelers toevoegen</span>
             <textarea id="new-player-names" rows="7" maxlength="1000" autocomplete="off" placeholder="Corne&#10;Peter&#10;Jan&#10;Lisa"></textarea>
           </label>
-          <p class="field-help">Plak alle namen in één keer: één naam per regel, of gescheiden door komma’s. Alleen de beheerderscode kan spelers toevoegen.</p>
+          <p class="field-help">Plak alle namen in één keer: één naam per regel, of gescheiden door komma’s. Alleen de beheerderscode kan spelers toevoegen, activeren, deactiveren of definitief verwijderen.</p>
           <button class="primary-button compact" type="submit">Namen toevoegen</button>
         </form>
         <div id="admin-player-list" class="admin-list"></div>
@@ -245,14 +328,34 @@
       <section class="panel setup-panel">
         <div class="panel-heading">
           <div>
-            <p class="eyebrow">Puntentelling</p>
-            <h2>Actieve regels</h2>
+            <p class="eyebrow">Ranglijstbeheer</p>
+            <h2>Rangschikking bepalen</h2>
           </div>
+          <span class="muted">Alleen met beheerderscode</span>
         </div>
+        <form id="ranking-settings-form" class="stack-form ranking-settings-form">
+          <label>
+            <span>Primair rangschikkingscriterium</span>
+            <select id="ranking-criterion-select" required>
+              <option value="average_penalty">Gemiddelde strafpunten – laagste bovenaan</option>
+              <option value="wins">Gewonnen potjes – meeste bovenaan</option>
+              <option value="win_rate">Winstpercentage – hoogste bovenaan</option>
+              <option value="total_penalty">Totaal strafpunten – laagste bovenaan</option>
+              <option value="games_played">Gespeelde potjes – meeste bovenaan</option>
+            </select>
+          </label>
+          <p class="field-help">De keuze geldt direct voor de algemene ranglijst en de periodestand. Spelers met 1–9 potjes worden al volgens dit criterium gesorteerd, maar blijven grijs en tellen pas vanaf 10 potjes officieel mee. Spelers met 0 potjes staan onderaan.</p>
+          <button class="primary-button compact" type="submit">Rangschikking opslaan</button>
+        </form>
+
+        <div class="active-rule-card">
+          <span>Huidige rangschikking</span>
+          <strong id="active-ranking-rule">Laagste gemiddelde strafpunten</strong>
+        </div>
+
         <ul class="rule-list">
           <li><strong>Kwalificatie:</strong> vanaf 10 gespeelde potjes.</li>
-          <li><strong>Rangschikking:</strong> laagste gemiddelde strafpunten bovenaan.</li>
-          <li><strong>Gelijke stand:</strong> meeste gewonnen potjes, daarna meeste gespeelde potjes.</li>
+          <li><strong>Gelijke stand:</strong> automatisch beslist met de overige statistieken en daarna alfabetisch.</li>
           <li><strong>1–9 kaarten:</strong> 1 strafpunt per kaart.</li>
           <li><strong>10–12 kaarten:</strong> dubbele strafpunten.</li>
           <li><strong>13 kaarten of meer:</strong> altijd maximaal 39 strafpunten.</li>
@@ -286,11 +389,22 @@
     <form id="edit-game-form" class="dialog-card">
       <p class="eyebrow">Correctie</p>
       <h2>Potje aanpassen</h2>
-      <p>De deelnemers blijven gelijk. Wijzig de winnaar, kaarten of opmerking.</p>
-      <label>
-        <span>Winnaar</span>
-        <select id="edit-winner-select" required></select>
-      </label>
+      <p>Alle wijzigingen zijn alleen mogelijk met de beheerderscode en worden in het logboek vastgelegd.</p>
+      <fieldset>
+        <legend>Deelnemers</legend>
+        <p class="field-help">Selecteer 2 tot 8 spelers. Actieve spelers kunnen worden toegevoegd; bestaande inactieve deelnemers blijven beschikbaar voor historische correcties.</p>
+        <div id="edit-participant-chips" class="chip-grid"></div>
+      </fieldset>
+      <div class="form-grid two-columns">
+        <label>
+          <span>Winnaar</span>
+          <select id="edit-winner-select" required></select>
+        </label>
+        <label>
+          <span>Wie voerde dit in?</span>
+          <select id="edit-entered-by-select" required></select>
+        </label>
+      </div>
       <fieldset>
         <legend>Overgebleven kaarten</legend>
         <div id="edit-cards-inputs" class="score-inputs"></div>
@@ -319,7 +433,7 @@
     </form>
   </dialog>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8/dist/umd/supabase.js" integrity="sha384-M65KxMm/JqBppck6onbmAgPVMBHrmPCf1L17Q+71EcvI9/VVI8j5cqoxQf6lj6h2" crossorigin="anonymous"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

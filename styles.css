@@ -328,3 +328,101 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
   body.printing-history .period-ranking-section { break-inside: avoid; page-break-inside: avoid; }
   body.printing-history .history-list-heading { margin-top: 20px; }
 }
+
+/* Spelregels en handrangschikking op het dashboard */
+.game-rules-panel { overflow: hidden; }
+.hand-ranking-figure {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #031426;
+}
+.hand-ranking-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.rules-details {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+}
+.rules-details summary {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 850;
+  list-style: none;
+  user-select: none;
+}
+.rules-details summary::-webkit-details-marker { display: none; }
+.rules-details summary::after {
+  content: "⌄";
+  color: var(--accent-2);
+  font-size: 1.25rem;
+  transition: transform .18s ease;
+}
+.rules-details[open] summary::after { transform: rotate(180deg); }
+.rules-details[open] summary { border-bottom: 1px solid var(--line); }
+.rules-content {
+  padding: 4px 18px 20px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.rules-content h3 {
+  margin: 20px 0 7px;
+  color: var(--text);
+  font-size: 1rem;
+}
+.rules-content p { margin: 0 0 10px; }
+.rules-content ul { margin: 6px 0 12px; padding-left: 20px; }
+.rules-content li { margin: 5px 0; }
+.rules-content strong { color: var(--text); }
+
+@media (max-width: 700px) {
+  .game-rules-panel { padding: 14px; }
+  .hand-ranking-figure { border-radius: 12px; }
+  .rules-content { padding-inline: 14px; }
+}
+
+/* Beheer: rangschikking en definitief spelers verwijderen */
+.admin-player-info { display: grid; gap: 3px; min-width: 0; }
+.admin-player-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-player-info small { color: var(--muted); font-size: .74rem; }
+.admin-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.delete-player-button {
+  border: 1px solid rgba(251,113,133,.36);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #fecdd3;
+  background: rgba(190,24,93,.12);
+  font-weight: 750;
+}
+.delete-player-button:hover { border-color: var(--danger); background: rgba(190,24,93,.24); }
+.ranking-settings-form { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.active-rule-card {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(245,158,11,.25);
+  border-radius: 13px;
+  background: rgba(245,158,11,.07);
+}
+.active-rule-card span { color: var(--muted); font-size: .78rem; }
+.active-rule-card strong { color: #fde68a; }
+
+@media (max-width: 700px) {
+  .admin-row { align-items: flex-start; flex-direction: column; }
+  .admin-row-actions { width: 100%; justify-content: stretch; }
+  .admin-row-actions button { flex: 1; }
+}

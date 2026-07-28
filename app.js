@@ -4,6 +4,14 @@
   const config = window.BIG2_CONFIG || {};
   const QUALIFYING_GAMES = 10;
   const ADMIN_ACTOR_KEY = "__admin__";
+  const DEFAULT_RANKING_CRITERION = "average_penalty";
+  const RANKING_CRITERIA = {
+    average_penalty: { label: "Laagste gemiddelde strafpunten", short: "Gem. straf · laagste bovenaan" },
+    wins: { label: "Meeste gewonnen potjes", short: "Gewonnen · meeste bovenaan" },
+    win_rate: { label: "Hoogste winstpercentage", short: "Winst% · hoogste bovenaan" },
+    total_penalty: { label: "Laagste totaal aantal strafpunten", short: "Straf totaal · laagste bovenaan" },
+    games_played: { label: "Meeste gespeelde potjes", short: "Potjes · meeste bovenaan" }
+  };
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -20,16 +28,23 @@
     historyPeriodLabel: $("#history-period-label"), historyGameCount: $("#history-game-count"), historyPlayerCount: $("#history-player-count"),
     historyRankingBody: $("#history-ranking-body"), historyPrintTitle: $("#history-print-title"), historyPrintMeta: $("#history-print-meta"),
     addPlayerForm: $("#add-player-form"), newPlayerNames: $("#new-player-names"), adminPlayerList: $("#admin-player-list"),
+    rankingRuleLabel: $("#ranking-rule-label"), historyRankingRuleLabel: $("#history-ranking-rule-label"),
+    activeRankingRule: $("#active-ranking-rule"), rankingSettingsForm: $("#ranking-settings-form"),
+    rankingCriterionSelect: $("#ranking-criterion-select"),
     identityDialog: $("#identity-dialog"), identityForm: $("#identity-form"), identitySelect: $("#identity-select"),
     confirmDialog: $("#confirm-dialog"), confirmTitle: $("#confirm-title"), confirmText: $("#confirm-text"),
-    editGameDialog: $("#edit-game-dialog"), editGameForm: $("#edit-game-form"), editWinnerSelect: $("#edit-winner-select"),
-    editCardsInputs: $("#edit-cards-inputs"), editGameNote: $("#edit-game-note"), editGameValidation: $("#edit-game-validation")
+    editGameDialog: $("#edit-game-dialog"), editGameForm: $("#edit-game-form"),
+    editParticipantChips: $("#edit-participant-chips"), editWinnerSelect: $("#edit-winner-select"),
+    editEnteredBySelect: $("#edit-entered-by-select"), editCardsInputs: $("#edit-cards-inputs"),
+    editGameNote: $("#edit-game-note"), editGameValidation: $("#edit-game-validation")
   };
 
   let state = { group: { name: "Big Two Vakantiestand" }, players: [], games: [], logs: [] };
   let selectedPlayers = new Set();
   let currentActorKey = "";
   let editingGameId = "";
+  let editingPlayers = new Set();
+  let editingCardValues = new Map();
   let historyStart = "";
   let historyEnd = "";
   let backend;
@@ -59,12 +74,23 @@
     : "";
 
   function normalizeState(next) {
+    const group = { ...(next?.group || { name: "Big Two Vakantiestand" }) };
+    if (!RANKING_CRITERIA[group.ranking_criterion]) group.ranking_criterion = DEFAULT_RANKING_CRITERION;
     return {
-      group: next?.group || { name: "Big Two Vakantiestand" },
+      group,
       players: Array.isArray(next?.players) ? next.players : [],
       games: Array.isArray(next?.games) ? next.games : [],
       logs: Array.isArray(next?.logs) ? next.logs : []
     };
+  }
+
+  function rankingCriterion() {
+    const value = state.group?.ranking_criterion;
+    return RANKING_CRITERIA[value] ? value : DEFAULT_RANKING_CRITERION;
+  }
+
+  function rankingLabel() {
+    return RANKING_CRITERIA[rankingCriterion()].label;
   }
 
   function actorStorageKey() {
@@ -94,7 +120,7 @@
         return migrated;
       }
       const initial = normalizeState({
-        group: { name: "Big Two Vakantiestand – demo", slug: "demo" },
+        group: { name: "Big Two Vakantiestand – demo", slug: "demo", ranking_criterion: DEFAULT_RANKING_CRITERION },
         players: [],
         games: [], logs: []
       });
@@ -148,6 +174,26 @@
       this.addLog(current, "player_status_changed", actor, "player", id, { name: player.name, previous_active: previousActive, active });
       this.save(current); return current;
     }
+    async deletePlayer(id, adminPin, actor) {
+      const current = await this.bootstrap();
+      const player = current.players.find((p) => p.id === id);
+      if (!player) throw new Error("Speler niet gevonden.");
+      const removedGames = current.games.filter((game) =>
+        game.entered_by === id || game.winner === id || (game.entries || []).some((entry) => entry.player_id === id)
+      );
+      current.games = current.games.filter((game) => !removedGames.some((removed) => removed.id === game.id));
+      current.players = current.players.filter((p) => p.id !== id);
+      this.addLog(current, "player_deleted", actor, "player", id, { name: player.name, games_deleted: removedGames.length });
+      this.save(current); return current;
+    }
+    async setRankingCriterion(criterion, adminPin, actor) {
+      if (!RANKING_CRITERIA[criterion]) throw new Error("Ongeldig rangschikkingscriterium.");
+      const current = await this.bootstrap();
+      const previous = current.group.ranking_criterion || DEFAULT_RANKING_CRITERION;
+      current.group.ranking_criterion = criterion;
+      this.addLog(current, "ranking_changed", actor, "group", current.group.id || null, { previous, criterion });
+      this.save(current); return current;
+    }
     async deleteGame(id, adminPin, actor) {
       const current = await this.bootstrap();
       const game = current.games.find((item) => item.id === id);
@@ -185,7 +231,8 @@
     updateGame(id, payload, adminPin, actor) {
       return this.rpc("big2_admin_update_game", {
         p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
-        p_game_id: id, p_winner: payload.winner, p_entries: payload.entries, p_note: payload.note || null
+        p_game_id: id, p_entered_by: payload.entered_by, p_winner: payload.winner,
+        p_entries: payload.entries, p_note: payload.note || null
       });
     }
     addPlayers(names, adminPin, actor) {
@@ -198,6 +245,18 @@
       return this.rpc("big2_admin_set_player_active", {
         p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
         p_player_id: id, p_active: active
+      });
+    }
+    deletePlayer(id, adminPin, actor) {
+      return this.rpc("big2_admin_delete_player", {
+        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_player_id: id
+      });
+    }
+    setRankingCriterion(criterion, adminPin, actor) {
+      return this.rpc("big2_admin_set_ranking", {
+        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_criterion: criterion
       });
     }
     deleteGame(id, adminPin, actor) {
@@ -260,9 +319,12 @@
         currentActorKey = value;
         localStorage.setItem(actorStorageKey(), currentActorKey);
         elements.identityDialog.close();
+      };
+      // Escape of annuleren mag het opstarten niet blokkeren.
+      elements.identityDialog.addEventListener("close", () => {
         updateCurrentUserButton();
         resolve(currentActor());
-      };
+      }, { once: true });
     });
   }
 
@@ -281,13 +343,38 @@
   async function ensureLoaded() {
     try {
       state = normalizeState(await backend.bootstrap());
+      // Toon de stand direct; de gebruikerskeuze mag de pagina niet leeg houden.
+      renderAll();
       const actor = await requestIdentity(false);
-      await logAccessOnce(actor, false);
+      if (actor) await logAccessOnce(actor, false);
       renderAll();
     } catch (error) {
       showToast(error.message, true);
       throw error;
     }
+  }
+
+  function compareRankingRows(a, b, criterion = rankingCriterion()) {
+    let result = 0;
+    switch (criterion) {
+      case "wins":
+        result = b.wins - a.wins || b.winRate - a.winRate || a.averagePenalty - b.averagePenalty || b.games - a.games;
+        break;
+      case "win_rate":
+        result = b.winRate - a.winRate || b.wins - a.wins || a.averagePenalty - b.averagePenalty || b.games - a.games;
+        break;
+      case "total_penalty":
+        result = a.penalties - b.penalties || a.averagePenalty - b.averagePenalty || b.wins - a.wins || b.games - a.games;
+        break;
+      case "games_played":
+        result = b.games - a.games || b.wins - a.wins || a.averagePenalty - b.averagePenalty || b.winRate - a.winRate;
+        break;
+      case "average_penalty":
+      default:
+        result = a.averagePenalty - b.averagePenalty || b.wins - a.wins || b.games - a.games || b.winRate - a.winRate;
+        break;
+    }
+    return result || a.name.localeCompare(b.name, "nl");
   }
 
   function getStats(games = state.games) {
@@ -310,12 +397,27 @@
       winRate: row.games ? row.wins / row.games : 0,
       averagePenalty: row.games ? row.penalties / row.games : 0
     })).sort((a, b) => {
+      // Officieel gekwalificeerden blijven bovenaan. Spelers met 1–9 potjes
+      // worden daaronder al volgens het gekozen criterium gesorteerd, maar
+      // blijven grijs. Spelers zonder gespeelde potjes staan altijd onderaan.
       if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
-      if (a.qualified) {
-        return a.averagePenalty - b.averagePenalty || b.wins - a.wins || b.games - a.games || a.name.localeCompare(b.name, "nl");
-      }
-      return b.games - a.games || a.averagePenalty - b.averagePenalty || b.wins - a.wins || a.name.localeCompare(b.name, "nl");
+      const aHasGames = a.games > 0;
+      const bHasGames = b.games > 0;
+      if (aHasGames !== bHasGames) return aHasGames ? -1 : 1;
+      if (!aHasGames && !bHasGames) return a.name.localeCompare(b.name, "nl");
+      return compareRankingRows(a, b);
     });
+  }
+
+  function leaderDetailText(row) {
+    if (!row) return "Nog geen uitslagen";
+    switch (rankingCriterion()) {
+      case "wins": return `${row.wins} gewonnen · ${row.games} potjes`;
+      case "win_rate": return `${(row.winRate * 100).toFixed(1)}% winst · ${row.games} potjes`;
+      case "total_penalty": return `${row.penalties} strafpunten totaal · ${row.games} potjes`;
+      case "games_played": return `${row.games} potjes · ${row.wins} gewonnen`;
+      default: return `${row.averagePenalty.toFixed(1)} gem. straf · ${row.games} potjes`;
+    }
   }
 
   function rankingRowsHtml(stats, emptyMessage = "Voeg eerst spelers toe.") {
@@ -345,12 +447,13 @@
     const leader = qualified[0];
     elements.leaderName.textContent = leader?.name || "–";
     elements.leaderDetail.textContent = leader
-      ? `${leader.averagePenalty.toFixed(1)} gem. straf · ${leader.games} potjes`
+      ? leaderDetailText(leader)
       : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
+    elements.rankingRuleLabel.textContent = `Vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
 
     elements.rankingBody.innerHTML = rankingRowsHtml(stats);
 
-    renderGameList(elements.recentGames, state.games.slice(0, 5), false);
+    renderGameList(elements.recentGames, state.games.slice(0, 2), false);
   }
 
   function gameCard(game, allowActions) {
@@ -394,6 +497,7 @@
     elements.historyGameCount.textContent = games.length;
     elements.historyPlayerCount.textContent = stats.length;
     elements.historyRankingBody.innerHTML = rankingRowsHtml(stats, "Geen spelers in deze periode.");
+    elements.historyRankingRuleLabel.textContent = `Vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
     elements.historyPrintTitle.textContent = `${state.group?.name || "Big Two"} – periodestand`;
     elements.historyPrintMeta.textContent = `${historyPeriodText()} · ${games.length} potje${games.length === 1 ? "" : "s"} · rapport gemaakt op ${formatLogDate(new Date().toISOString())}`;
     renderGameList(elements.historyGames, games, true);
@@ -436,18 +540,25 @@
     updateEntryControls();
   }
 
+  function updateEnteredByOptions() {
+    const players = [...selectedPlayers].map(playerById).filter(Boolean);
+    const winnerId = elements.winnerSelect.value;
+    const previousEnteredBy = elements.enteredBySelect.value;
+    const options = players.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+    elements.enteredBySelect.innerHTML = `<option value="">Kies invoerder</option>${options}`;
+    elements.enteredBySelect.disabled = players.length < 2 || !winnerId;
+    if (players.some((player) => player.id === previousEnteredBy)) elements.enteredBySelect.value = previousEnteredBy;
+    else if (players.some((player) => player.id === currentActorKey)) elements.enteredBySelect.value = currentActorKey;
+  }
+
   function updateEntryControls() {
     const players = [...selectedPlayers].map(playerById).filter(Boolean);
     const previousWinner = elements.winnerSelect.value;
-    const previousEnteredBy = elements.enteredBySelect.value;
     const options = players.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
     elements.winnerSelect.innerHTML = `<option value="">Kies winnaar</option>${options}`;
-    elements.enteredBySelect.innerHTML = `<option value="">Kies invoerder</option>${options}`;
     elements.winnerSelect.disabled = players.length < 2;
-    elements.enteredBySelect.disabled = players.length < 2;
     if (selectedPlayers.has(previousWinner)) elements.winnerSelect.value = previousWinner;
-    if (selectedPlayers.has(previousEnteredBy)) elements.enteredBySelect.value = previousEnteredBy;
-    else if (selectedPlayers.has(currentActorKey)) elements.enteredBySelect.value = currentActorKey;
+    updateEnteredByOptions();
     elements.cardsFieldset.disabled = !elements.winnerSelect.value;
     renderCardsInputs();
   }
@@ -470,10 +581,18 @@
   }
 
   function renderAdmin() {
-    elements.adminPlayerList.innerHTML = state.players.map((player) => `<div class="admin-row ${player.active ? "" : "inactive"}">
-      <span>${escapeHtml(player.name)}</span>
-      <button class="status-button" type="button" data-player-active="${player.id}" data-next-active="${!player.active}">${player.active ? "Deactiveren" : "Activeren"}</button>
-    </div>`).join("") || '<p class="empty-state">Nog geen spelers.</p>';
+    elements.rankingCriterionSelect.value = rankingCriterion();
+    elements.activeRankingRule.textContent = rankingLabel();
+    elements.adminPlayerList.innerHTML = state.players.map((player) => {
+      const gamesCount = state.games.filter((game) => (game.entries || []).some((entry) => entry.player_id === player.id)).length;
+      return `<div class="admin-row ${player.active ? "" : "inactive"}">
+        <div class="admin-player-info"><strong>${escapeHtml(player.name)}</strong><small>${gamesCount} potje${gamesCount === 1 ? "" : "s"}</small></div>
+        <div class="admin-row-actions">
+          <button class="status-button" type="button" data-player-active="${player.id}" data-next-active="${!player.active}">${player.active ? "Deactiveren" : "Activeren"}</button>
+          <button class="delete-player-button" type="button" data-delete-player="${player.id}">Definitief verwijderen</button>
+        </div>
+      </div>`;
+    }).join("") || '<p class="empty-state">Nog geen spelers.</p>';
   }
 
   function describeLog(log) {
@@ -486,6 +605,8 @@
       case "game_deleted": return `Potje verwijderd${game.winner ? ` · winnaar ${playerName(game.winner)}` : ""}`;
       case "player_added": return `Speler toegevoegd · ${details.name || "onbekend"}`;
       case "player_status_changed": return `${details.active ? "Speler geactiveerd" : "Speler gedeactiveerd"} · ${details.name || "onbekend"}`;
+      case "player_deleted": return `Speler definitief verwijderd · ${details.name || "onbekend"} · ${details.games_deleted || 0} potje(s) verwijderd`;
+      case "ranking_changed": return `Rangschikking gewijzigd · ${RANKING_CRITERIA[details.criterion]?.label || details.criterion || "onbekend"}`;
       default: return log.action || "Onbekende actie";
     }
   }
@@ -493,7 +614,7 @@
   function renderLogbook() {
     elements.logbookList.classList.toggle("empty-state", state.logs.length === 0);
     elements.logbookList.innerHTML = state.logs.length ? state.logs.map((log) => `<article class="log-card">
-      <div class="log-icon">${log.action === "site_access" ? "👁" : log.action === "game_deleted" ? "🗑" : log.action === "game_updated" ? "✎" : "•"}</div>
+      <div class="log-icon">${log.action === "site_access" ? "👁" : ["game_deleted", "player_deleted"].includes(log.action) ? "🗑" : log.action === "game_updated" ? "✎" : log.action === "ranking_changed" ? "↕" : "•"}</div>
       <div><h3>${escapeHtml(describeLog(log))}</h3><p><strong>${escapeHtml(log.actor_name || "Onbekend")}</strong> · ${formatLogDate(log.created_at)}</p></div>
     </article>`).join("") : "Nog geen logboekregels.";
   }
@@ -505,7 +626,9 @@
   }
 
   async function requireActor() {
-    return currentActor() || await requestIdentity(false);
+    const actor = currentActor() || await requestIdentity(false);
+    if (!actor) throw new Error("Kies eerst bovenaan de pagina wie de site gebruikt.");
+    return actor;
   }
 
   async function askAdminPin() {
@@ -530,7 +653,10 @@
     const entries = [];
     for (const playerId of ids) {
       const input = $(inputSelector(playerId));
-      const cards = Number(input?.value);
+      if (!input || input.value === "") {
+        throw new Error(`Vul voor ${playerName(playerId)} het aantal kaarten in.`);
+      }
+      const cards = Number(input.value);
       if (!Number.isInteger(cards) || cards < (playerId === winner ? 0 : 1) || cards > maxCards) {
         throw new Error(`Vul voor ${playerName(playerId)} een geldig aantal kaarten in van ${playerId === winner ? 0 : 1} t/m ${maxCards}.`);
       }
@@ -543,7 +669,7 @@
     event.preventDefault(); showValidation("");
     const winner = elements.winnerSelect.value;
     const enteredBy = elements.enteredBySelect.value;
-    if (selectedPlayers.size < 2) return showValidation("Selecteer minimaal twee spelers.");
+    if (selectedPlayers.size < 2 || selectedPlayers.size > 8) return showValidation("Selecteer 2 tot 8 spelers.");
     if (!winner || !enteredBy) return showValidation("Kies de winnaar en de invoerder.");
     let entries;
     try { entries = validateEntries(selectedPlayers, winner, (id) => `[data-card-player="${id}"]`); }
@@ -574,6 +700,30 @@
   }
 
   async function handleAdminClick(event) {
+    const deleteButton = event.target.closest("[data-delete-player]");
+    if (deleteButton) {
+      const id = deleteButton.dataset.deletePlayer;
+      const player = playerById(id);
+      if (!player) return showToast("Speler niet gevonden.", true);
+      const gamesCount = state.games.filter((game) =>
+        game.entered_by === id || game.winner === id || (game.entries || []).some((entry) => entry.player_id === id)
+      ).length;
+      const warning = gamesCount
+        ? `${player.name} komt voor in ${gamesCount} potje${gamesCount === 1 ? "" : "s"}. De speler én al deze potjes worden permanent verwijderd. Dit kan niet ongedaan worden gemaakt.`
+        : `${player.name} wordt permanent verwijderd. Dit kan niet ongedaan worden gemaakt.`;
+      if (!await confirmAction("Speler definitief verwijderen?", warning)) return;
+      try {
+        state = await backend.deletePlayer(id, await askAdminPin(), await requireActor());
+        selectedPlayers.delete(id);
+        if (currentActorKey === id) {
+          currentActorKey = ADMIN_ACTOR_KEY;
+          localStorage.setItem(actorStorageKey(), currentActorKey);
+        }
+        renderAll(); showToast(`Speler verwijderd${gamesCount ? `, inclusief ${gamesCount} potje${gamesCount === 1 ? "" : "s"}` : ""}.`);
+      } catch (error) { showToast(error.message, true); }
+      return;
+    }
+
     const button = event.target.closest("[data-player-active]"); if (!button) return;
     const id = button.dataset.playerActive; const active = button.dataset.nextActive === "true";
     try {
@@ -582,33 +732,89 @@
     } catch (error) { showToast(error.message, true); }
   }
 
-  function renderEditInputs() {
+  async function handleRankingSettings(event) {
+    event.preventDefault();
+    const criterion = elements.rankingCriterionSelect.value;
+    if (!RANKING_CRITERIA[criterion]) return showToast("Kies een geldig rangschikkingscriterium.", true);
+    try {
+      state = await backend.setRankingCriterion(criterion, await askAdminPin(), await requireActor());
+      renderAll(); showToast(`Rangschikking ingesteld op: ${RANKING_CRITERIA[criterion].label}.`);
+    } catch (error) { showToast(error.message, true); }
+  }
+
+  function captureEditCardValues() {
+    $$('[data-edit-card-player]').forEach((input) => {
+      editingCardValues.set(input.dataset.editCardPlayer, input.value);
+    });
+  }
+
+  function editAvailablePlayers(game) {
+    const originalIds = new Set((game.entries || []).map((entry) => entry.player_id));
+    return state.players.filter((player) => player.active || originalIds.has(player.id));
+  }
+
+  function renderEditParticipantChips() {
     const game = state.games.find((item) => item.id === editingGameId);
     if (!game) return;
+    const players = editAvailablePlayers(game);
+    elements.editParticipantChips.innerHTML = players.map((player) => `<label class="player-chip ${player.active ? "" : "inactive"}">
+      <input type="checkbox" value="${player.id}" ${editingPlayers.has(player.id) ? "checked" : ""}>
+      <span>${escapeHtml(player.name)}${player.active ? "" : " · inactief"}</span>
+    </label>`).join("");
+  }
+
+  function updateEditEnteredByOptions(preferredEnteredBy = "") {
+    const players = [...editingPlayers].map(playerById).filter(Boolean);
     const winner = elements.editWinnerSelect.value;
-    const existing = new Map($$("[data-edit-card-player]").map((input) => [input.dataset.editCardPlayer, input.value]));
-    const maxCards = maxCardsForPlayerCount((game.entries || []).length);
-    elements.editCardsInputs.innerHTML = (game.entries || []).map((entry) => {
-      const isWinner = entry.player_id === winner;
-      let value = isWinner ? 0 : (existing.get(entry.player_id) ?? entry.cards);
-      if (!isWinner && Number(value) === 0) value = 1;
-      return `<div class="score-row ${isWinner ? "winner-row" : ""}">
-        <span class="score-name">${escapeHtml(playerName(entry.player_id))}</span>
-        <input data-edit-card-player="${entry.player_id}" type="number" inputmode="numeric" min="${isWinner ? 0 : 1}" max="${maxCards}" value="${value}" ${isWinner ? "readonly" : "required"}>
-        <span class="penalty-preview">${scorePenalty(Number(value))} strafpunten</span>
-      </div>`;
-    }).join("");
+    const previous = preferredEnteredBy || elements.editEnteredBySelect.value;
+    elements.editEnteredBySelect.innerHTML = `<option value="">Kies invoerder</option>${players
+      .map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("")}`;
+    elements.editEnteredBySelect.disabled = players.length === 0 || !winner;
+    if (players.some((player) => player.id === previous)) elements.editEnteredBySelect.value = previous;
+  }
+
+  function updateEditControls(preferredWinner = "", preferredEnteredBy = "") {
+    captureEditCardValues();
+    const players = [...editingPlayers].map(playerById).filter(Boolean);
+    const previousWinner = preferredWinner || elements.editWinnerSelect.value;
+    elements.editWinnerSelect.innerHTML = `<option value="">Kies winnaar</option>${players
+      .map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("")}`;
+    elements.editWinnerSelect.disabled = players.length < 2;
+    if (players.some((player) => player.id === previousWinner)) elements.editWinnerSelect.value = previousWinner;
+    updateEditEnteredByOptions(preferredEnteredBy);
+    renderEditInputs();
+  }
+
+  function renderEditInputs() {
+    captureEditCardValues();
+    const winner = elements.editWinnerSelect.value;
+    const players = [...editingPlayers].map(playerById).filter(Boolean);
+    const maxCards = maxCardsForPlayerCount(players.length);
+    elements.editCardsInputs.innerHTML = !winner
+      ? '<p class="empty-state">Kies eerst de winnaar.</p>'
+      : players.map((player) => {
+        const isWinner = player.id === winner;
+        let value = isWinner ? 0 : (editingCardValues.get(player.id) ?? "");
+        if (!isWinner && Number(value) === 0) value = "";
+        const preview = value === "" ? "– strafpunten" : `${scorePenalty(Number(value))} strafpunten`;
+        return `<div class="score-row ${isWinner ? "winner-row" : ""}">
+          <span class="score-name">${escapeHtml(player.name)}</span>
+          <input data-edit-card-player="${player.id}" type="number" inputmode="numeric" min="${isWinner ? 0 : 1}" max="${maxCards}" value="${value}" ${isWinner ? "readonly" : "required"}>
+          <span class="penalty-preview" data-edit-penalty-player="${player.id}">${preview}</span>
+        </div>`;
+      }).join("");
   }
 
   function openEditGame(id) {
     const game = state.games.find((item) => item.id === id);
     if (!game) return showToast("Potje niet gevonden.", true);
     editingGameId = id;
+    editingPlayers = new Set((game.entries || []).map((entry) => entry.player_id));
+    editingCardValues = new Map((game.entries || []).map((entry) => [entry.player_id, String(entry.cards)]));
     showValidation("", elements.editGameValidation);
-    elements.editWinnerSelect.innerHTML = (game.entries || []).map((entry) => `<option value="${entry.player_id}">${escapeHtml(playerName(entry.player_id))}</option>`).join("");
-    elements.editWinnerSelect.value = game.winner;
     elements.editGameNote.value = game.note || "";
-    renderEditInputs();
+    renderEditParticipantChips();
+    updateEditControls(game.winner, game.entered_by);
     elements.editGameDialog.showModal();
   }
 
@@ -617,17 +823,37 @@
     showValidation("", elements.editGameValidation);
     const game = state.games.find((item) => item.id === editingGameId);
     if (!game) return showValidation("Potje niet gevonden.", elements.editGameValidation);
+    if (editingPlayers.size < 2 || editingPlayers.size > 8) {
+      return showValidation("Selecteer 2 tot 8 deelnemers.", elements.editGameValidation);
+    }
     const winner = elements.editWinnerSelect.value;
-    const ids = (game.entries || []).map((entry) => entry.player_id);
+    const enteredBy = elements.editEnteredBySelect.value;
+    if (!winner || !editingPlayers.has(winner)) {
+      return showValidation("Kies een winnaar uit de deelnemers.", elements.editGameValidation);
+    }
+    if (!enteredBy || !editingPlayers.has(enteredBy)) {
+      return showValidation("Kies een invoerder uit de deelnemers.", elements.editGameValidation);
+    }
     let entries;
-    try { entries = validateEntries(ids, winner, (id) => `[data-edit-card-player="${id}"]`); }
+    try { entries = validateEntries(editingPlayers, winner, (id) => `[data-edit-card-player="${id}"]`); }
     catch (error) { return showValidation(error.message, elements.editGameValidation); }
     try {
-      const submit = elements.editGameForm.querySelector("button[type=submit]"); submit.disabled = true;
-      state = await backend.updateGame(editingGameId, { winner, entries, note: elements.editGameNote.value.trim() }, await askAdminPin(), await requireActor());
-      elements.editGameDialog.close(); editingGameId = ""; renderAll(); showToast("Potje aangepast.");
+      const submit = elements.editGameForm.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      state = await backend.updateGame(editingGameId, {
+        entered_by: enteredBy,
+        winner,
+        entries,
+        note: elements.editGameNote.value.trim()
+      }, await askAdminPin(), await requireActor());
+      elements.editGameDialog.close();
+      editingGameId = "";
+      editingPlayers.clear();
+      editingCardValues.clear();
+      renderAll();
+      showToast("Potje aangepast.");
     } catch (error) { showValidation(error.message, elements.editGameValidation); }
-    finally { elements.editGameForm.querySelector("button[type=submit]").disabled = false; }
+    finally { elements.editGameForm.querySelector('button[type="submit"]').disabled = false; }
   }
 
   async function handleHistoryClick(event) {
@@ -641,6 +867,13 @@
     } catch (error) { showToast(error.message, true); }
   }
 
+  // Voorkom dat Excel of Google Sheets vrije tekst als formule uitvoert.
+  function csvCell(value) {
+    const text = String(value ?? "");
+    const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+    return `"${safe.replaceAll('"', '""')}"`;
+  }
+
   function exportCsv() {
     const games = filteredHistoryGames();
     if (!games.length) return showToast("Er zijn geen potjes in deze periode om te exporteren.", true);
@@ -649,7 +882,7 @@
       game.played_at || game.created_at, playerName(game.winner), playerName(game.entered_by), playerName(entry.player_id), entry.cards,
       entry.penalty ?? scorePenalty(entry.cards), game.note || ""
     ]));
-    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n");
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
     const range = historyStart || historyEnd ? `${historyStart || "begin"}-${historyEnd || "heden"}` : new Date().toISOString().slice(0, 10);
@@ -666,9 +899,17 @@
     $$(".nav-button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
     elements.participantChips.addEventListener("change", (event) => {
       const checkbox = event.target.closest('input[type="checkbox"]'); if (!checkbox) return;
-      checkbox.checked ? selectedPlayers.add(checkbox.value) : selectedPlayers.delete(checkbox.value); updateEntryControls();
+      if (checkbox.checked && selectedPlayers.size >= 8) {
+        checkbox.checked = false;
+        return showToast("Je kunt maximaal 8 spelers voor één potje selecteren.", true);
+      }
+      checkbox.checked ? selectedPlayers.add(checkbox.value) : selectedPlayers.delete(checkbox.value);
+      updateEntryControls();
     });
-    elements.winnerSelect.addEventListener("change", renderCardsInputs);
+    elements.winnerSelect.addEventListener("change", () => {
+      updateEnteredByOptions();
+      renderCardsInputs();
+    });
     elements.cardsInputs.addEventListener("input", (event) => {
       const input = event.target.closest("[data-card-player]"); if (!input) return;
       const preview = $(`[data-penalty-player="${input.dataset.cardPlayer}"]`);
@@ -676,9 +917,32 @@
     });
     elements.gameForm.addEventListener("submit", handleGameSubmit);
     elements.addPlayerForm.addEventListener("submit", handleAddPlayer);
+    elements.rankingSettingsForm.addEventListener("submit", handleRankingSettings);
     elements.adminPlayerList.addEventListener("click", handleAdminClick);
     elements.historyGames.addEventListener("click", handleHistoryClick);
-    elements.editWinnerSelect.addEventListener("change", renderEditInputs);
+    elements.editParticipantChips.addEventListener("change", (event) => {
+      const checkbox = event.target.closest('input[type="checkbox"]');
+      if (!checkbox) return;
+      captureEditCardValues();
+      if (checkbox.checked && editingPlayers.size >= 8) {
+        checkbox.checked = false;
+        return showValidation("Je kunt maximaal 8 deelnemers selecteren.", elements.editGameValidation);
+      }
+      checkbox.checked ? editingPlayers.add(checkbox.value) : editingPlayers.delete(checkbox.value);
+      showValidation("", elements.editGameValidation);
+      updateEditControls();
+    });
+    elements.editWinnerSelect.addEventListener("change", () => {
+      updateEditEnteredByOptions();
+      renderEditInputs();
+    });
+    elements.editCardsInputs.addEventListener("input", (event) => {
+      const input = event.target.closest("[data-edit-card-player]");
+      if (!input) return;
+      editingCardValues.set(input.dataset.editCardPlayer, input.value);
+      const preview = $(`[data-edit-penalty-player="${input.dataset.editCardPlayer}"]`);
+      if (preview) preview.textContent = input.value === "" ? "– strafpunten" : `${scorePenalty(Number(input.value))} strafpunten`;
+    });
     elements.editGameForm.addEventListener("submit", handleEditSubmit);
     elements.exportButton.addEventListener("click", exportCsv);
     elements.historyPdfButton.addEventListener("click", printHistoryReport);
