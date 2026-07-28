@@ -39,6 +39,10 @@
     editGameNote: $("#edit-game-note"), editGameValidation: $("#edit-game-validation"),
     playerHistoryDialog: $("#player-history-dialog"), playerHistoryName: $("#player-history-name"),
     playerHistoryStatus: $("#player-history-status"), playerHistorySummary: $("#player-history-summary"),
+    playerOpponentRule: $("#player-opponent-rule"),
+    playerOpponentRankingLeader: $("#player-opponent-ranking-leader"),
+    playerOpponentWinsLeader: $("#player-opponent-wins-leader"),
+    playerOpponentList: $("#player-opponent-list"),
     playerHistoryCount: $("#player-history-count"), playerHistoryGames: $("#player-history-games")
   };
 
@@ -442,6 +446,76 @@
     }).join("") || `<tr><td colspan="7" class="empty-state">${escapeHtml(emptyMessage)}</td></tr>`;
   }
 
+  function opponentCriterionDetail(row, criterion = rankingCriterion()) {
+    switch (criterion) {
+      case "wins":
+        return `${row.wins} keer gewonnen van deze speler`;
+      case "win_rate":
+        return `${(row.winRate * 100).toFixed(1)}% winst in gezamenlijke potjes`;
+      case "total_penalty":
+        return `${row.penalties} strafpunten totaal`;
+      case "games_played":
+        return `${row.games} gezamenlijke potje${row.games === 1 ? "" : "s"}`;
+      case "average_penalty":
+      default:
+        return `${row.averagePenalty.toFixed(1)} gemiddelde strafpunten`;
+    }
+  }
+
+  function getOpponentStats(playerId, playerGames) {
+    const opponents = new Map();
+    for (const game of playerGames) {
+      for (const entry of game.entries || []) {
+        if (entry.player_id === playerId) continue;
+        const opponent = playerById(entry.player_id);
+        if (!opponent) continue;
+        if (!opponents.has(opponent.id)) {
+          opponents.set(opponent.id, {
+            id: opponent.id,
+            name: opponent.name,
+            active: opponent.active,
+            games: 0,
+            wins: 0,
+            selectedPlayerWins: 0,
+            penalties: 0
+          });
+        }
+        const row = opponents.get(opponent.id);
+        row.games += 1;
+        row.penalties += Number(entry.penalty ?? scorePenalty(Number(entry.cards)));
+        if (game.winner === opponent.id) row.wins += 1;
+        if (game.winner === playerId) row.selectedPlayerWins += 1;
+      }
+    }
+    return [...opponents.values()].map((row) => ({
+      ...row,
+      winRate: row.games ? row.wins / row.games : 0,
+      averagePenalty: row.games ? row.penalties / row.games : 0
+    })).sort((a, b) => compareRankingRows(a, b));
+  }
+
+  function opponentStatsHtml(rows, selectedPlayerName) {
+    return rows.map((row, index) => `<article class="opponent-card ${index === 0 ? "top-ranked" : ""}">
+      <div class="opponent-card-head">
+        <div>
+          <strong>${escapeHtml(row.name)}</strong>
+          <span>${row.games} keer samen gespeeld${row.active ? "" : " · inactief"}</span>
+        </div>
+        <span class="opponent-position" title="Positie volgens huidige rangschikking">${index + 1}</span>
+      </div>
+      <div class="opponent-card-metrics">
+        <div><span>Won van ${escapeHtml(selectedPlayerName)}</span><strong>${row.wins}</strong></div>
+        <div><span>${escapeHtml(selectedPlayerName)} won</span><strong>${row.selectedPlayerWins}</strong></div>
+        <div><span>Winstpercentage</span><strong>${(row.winRate * 100).toFixed(1)}%</strong></div>
+        <div><span>Gem. straf</span><strong>${row.averagePenalty.toFixed(1)}</strong></div>
+      </div>
+      <div class="opponent-criterion-detail">
+        <span>${escapeHtml(RANKING_CRITERIA[rankingCriterion()].short)}</span>
+        <strong>${escapeHtml(opponentCriterionDetail(row))}</strong>
+      </div>
+    </article>`).join("");
+  }
+
   function playerHistoryGameHtml(game, playerId) {
     const entry = (game.entries || []).find((item) => item.player_id === playerId);
     if (!entry) return "";
@@ -485,6 +559,7 @@
     const stats = getStats(playerGames).find((row) => row.id === playerId) || {
       games: 0, wins: 0, penalties: 0, winRate: 0, averagePenalty: 0, qualified: false, gamesNeeded: QUALIFYING_GAMES
     };
+    const opponentStats = getOpponentStats(playerId, playerGames);
 
     elements.playerHistoryName.textContent = player.name;
     const qualification = stats.qualified
@@ -499,6 +574,27 @@
       <div class="player-history-stat"><span>Winstpercentage</span><strong>${(stats.winRate * 100).toFixed(1)}%</strong></div>
       <div class="player-history-stat"><span>Gem. straf</span><strong>${stats.games ? stats.averagePenalty.toFixed(1) : "–"}</strong></div>
       <div class="player-history-stat"><span>Straf totaal</span><strong>${stats.penalties}</strong></div>`;
+
+    elements.playerOpponentRule.textContent = opponentStats.length
+      ? `Gesorteerd op: ${rankingLabel()}`
+      : "Nog geen onderlinge resultaten";
+    const rankingLeader = opponentStats[0];
+    elements.playerOpponentRankingLeader.innerHTML = rankingLeader
+      ? `<span>Bovenaan volgens huidige rangschikking</span><strong>${escapeHtml(rankingLeader.name)}</strong><small>${escapeHtml(opponentCriterionDetail(rankingLeader))}</small>`
+      : `<span>Bovenaan volgens huidige rangschikking</span><strong>–</strong><small>Nog geen tegenstanders</small>`;
+    const mostOpponentWins = opponentStats.length ? Math.max(...opponentStats.map((row) => row.wins)) : 0;
+    const mostWinningNames = mostOpponentWins > 0
+      ? opponentStats.filter((row) => row.wins === mostOpponentWins).map((row) => row.name).join(", ")
+      : "Nog niemand";
+    elements.playerOpponentWinsLeader.innerHTML = `
+      <span>Meeste overwinningen tegen ${escapeHtml(player.name)}</span>
+      <strong>${escapeHtml(mostWinningNames)}</strong>
+      <small>${mostOpponentWins} gewonnen potje${mostOpponentWins === 1 ? "" : "s"}</small>`;
+    elements.playerOpponentList.innerHTML = opponentStats.length
+      ? opponentStatsHtml(opponentStats, player.name)
+      : '<p class="empty-state">Deze speler heeft nog geen tegenstanders gehad.</p>';
+    elements.playerOpponentList.classList.toggle("empty-state", !opponentStats.length);
+
     elements.playerHistoryCount.textContent = `${playerGames.length} potje${playerGames.length === 1 ? "" : "s"}`;
     elements.playerHistoryGames.innerHTML = playerGames.length
       ? playerGames.map((game) => playerHistoryGameHtml(game, playerId)).join("")

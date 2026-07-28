@@ -461,7 +461,22 @@
 
       <div id="player-history-summary" class="player-history-summary"></div>
 
-      <div class="player-history-section-heading">
+      <section class="player-opponent-section" aria-labelledby="player-opponent-title">
+        <div class="player-history-section-heading">
+          <div>
+            <p class="eyebrow">Onderlinge resultaten</p>
+            <h3 id="player-opponent-title">Tegenstanders</h3>
+          </div>
+          <span id="player-opponent-rule" class="muted"></span>
+        </div>
+        <div class="player-opponent-highlights">
+          <div id="player-opponent-ranking-leader" class="opponent-highlight"></div>
+          <div id="player-opponent-wins-leader" class="opponent-highlight"></div>
+        </div>
+        <div id="player-opponent-list" class="player-opponent-list empty-state">Nog geen tegenstanders.</div>
+      </section>
+
+      <div class="player-history-section-heading player-games-heading">
         <div>
           <p class="eyebrow">Alle gespeelde potjes</p>
           <h3>Uitslagen</h3>

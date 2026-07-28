@@ -486,9 +486,77 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
 .player-history-meta { margin: 8px 0 10px; }
 .selected-player-score { outline: 1px solid var(--accent); outline-offset: 1px; }
 
+
+.player-opponent-section { margin: 0 0 24px; }
+.player-opponent-highlights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 11px;
+}
+.opponent-highlight {
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid rgba(245, 158, 11, .3);
+  border-radius: 14px;
+  background: rgba(245, 158, 11, .06);
+}
+.opponent-highlight span,
+.opponent-highlight small { color: var(--muted); font-size: .75rem; }
+.opponent-highlight strong { color: #fde68a; font-size: 1.05rem; }
+.player-opponent-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.opponent-card {
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+}
+.opponent-card.top-ranked { border-color: rgba(245, 158, 11, .38); }
+.opponent-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.opponent-card-head > div { display: grid; gap: 3px; }
+.opponent-card-head span { color: var(--muted); font-size: .75rem; }
+.opponent-position {
+  min-width: 28px;
+  min-height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 3px 7px;
+  border: 1px solid rgba(245, 158, 11, .35);
+  border-radius: 999px;
+  color: #fde68a !important;
+  background: rgba(245, 158, 11, .08);
+  font-weight: 800;
+}
+.opponent-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.opponent-card-metrics > div {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.025);
+}
+.opponent-card-metrics span { color: var(--muted); font-size: .68rem; }
+.opponent-card-metrics strong { font-size: .96rem; }
+.opponent-criterion-detail {
+  display: grid;
+  gap: 3px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+.opponent-criterion-detail span { color: var(--muted); font-size: .68rem; }
+.opponent-criterion-detail strong { font-size: .82rem; }
+.player-games-heading { margin-top: 4px; }
+
 @media (max-width: 700px) {
   .player-history-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .player-history-stat:last-child { grid-column: 1 / -1; }
+  .player-opponent-highlights, .player-opponent-list { grid-template-columns: 1fr; }
   .player-history-dialog-card { padding: 16px; }
   .player-history-game-head { align-items: center; }
 }

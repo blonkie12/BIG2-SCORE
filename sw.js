@@ -1,4 +1,4 @@
-const CACHE = "big2-v14-player-history";
+const CACHE = "big2-v15-opponent-history";
 const ASSETS = [
   "./", "index.html", "styles.css", "app.js", "config.js", "icon.svg",
   "manifest.webmanifest", "big-two-handrangschikking.webp"
