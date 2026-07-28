@@ -15,6 +15,20 @@
 }
 
 * { box-sizing: border-box; }
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+@supports (overflow: clip) {
+  html, body { overflow-x: clip; }
+}
+.app-shell, .view, .panel, form, fieldset,
+.form-grid, .score-inputs, .score-row,
+.score-row > *, input, select, textarea {
+  min-width: 0;
+  max-width: 100%;
+}
 html { color-scheme: dark; }
 body {
   margin: 0;
@@ -162,12 +176,38 @@ textarea { resize: vertical; line-height: 1.45; }
 .rule-list strong { color: var(--text); }
 
 .bottom-nav {
-  position: fixed; z-index: 20; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); transform: translateX(-50%);
-  width: min(620px, calc(100% - 24px)); padding: 7px;
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
-  border: 1px solid var(--line); border-radius: 18px; background: rgba(8,19,33,.94); box-shadow: 0 18px 45px rgba(0,0,0,.45); backdrop-filter: blur(18px);
+  position: fixed;
+  z-index: 20;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  width: auto;
+  max-width: 620px;
+  margin-inline: auto;
+  padding: 7px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(8,19,33,.94);
+  box-shadow: 0 18px 45px rgba(0,0,0,.45);
+  backdrop-filter: blur(18px);
 }
-.nav-button { min-height: 52px; border: 0; border-radius: 12px; color: var(--muted); background: transparent; font-size: .74rem; font-weight: 750; }
+.nav-button {
+  min-width: 0;
+  min-height: 52px;
+  overflow: hidden;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--muted);
+  background: transparent;
+  font-size: .74rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .nav-button span { display: block; margin-bottom: 2px; font-size: 1.05rem; }
 .nav-button.active { color: var(--text); background: var(--surface-3); }
 .nav-button.accent { color: #fde68a; }
@@ -217,8 +257,8 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
   .user-button { max-width: 155px; min-height: 40px; font-size: .76rem; }
   .game-card-head { flex-direction: column; }
   .game-actions { width: 100%; justify-content: flex-end; }
-  .bottom-nav { width: min(680px, calc(100% - 16px)); padding: 5px; }
-  .nav-button { min-height: 50px; font-size: .65rem; }
+  .bottom-nav { left: max(6px, env(safe-area-inset-left)); right: max(6px, env(safe-area-inset-right)); padding: 5px; }
+  .nav-button { min-height: 50px; padding-inline: 1px; font-size: .65rem; }
 }
 
 
@@ -576,3 +616,11 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
 .leader-name-button:not(:disabled) { text-decoration: underline; text-decoration-color: rgba(245,158,11,.35); text-underline-offset: 4px; }
 .leader-name-button:not(:disabled):hover { color: #fde68a; }
 .leader-name-button:disabled { cursor: default; }
+
+
+@media (max-width: 380px) {
+  .bottom-nav { gap: 2px; padding: 4px; }
+  .nav-button { min-height: 48px; font-size: .58rem; }
+  .nav-button span { font-size: .95rem; }
+  .score-row { grid-template-columns: minmax(0, 1fr) 92px; }
+}

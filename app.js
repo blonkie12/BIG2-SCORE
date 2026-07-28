@@ -1142,7 +1142,7 @@
   async function init() {
     try { setupMode(); bindEvents(); await ensureLoaded(); }
     catch (error) { elements.modeBanner.hidden = false; elements.modeBanner.textContent = error.message; showToast(error.message, true); }
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=16", { updateViaCache: "none" }).catch(() => {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=17", { updateViaCache: "none" }).catch(() => {});
   }
 
   init();

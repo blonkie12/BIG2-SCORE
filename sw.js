@@ -1,10 +1,10 @@
-const CACHE = "big2-v16-opponent-sync";
+const CACHE = "big2-v17-mobile-nav";
 const ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=16",
-  "app.js?v=16",
-  "config.js?v=16",
+  "styles.css?v=17",
+  "app.js?v=17",
+  "config.js?v=17",
   "icon.svg",
   "manifest.webmanifest",
   "big-two-handrangschikking.webp"
