@@ -8,7 +8,7 @@
   <title>Big Two Vakantiestand</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=19">
 </head>
 <body>
   <header class="app-header">
@@ -89,14 +89,22 @@
           <span class="muted">Handrangschikking van hoog naar laag</span>
         </div>
 
-        <figure class="hand-ranking-figure">
-          <img
-            src="big-two-handrangschikking.webp"
-            alt="Big Two handrangschikking van hoog naar laag, met kaartvolgorde, symboolvolgorde en de belangrijkste spelregels"
-            loading="lazy"
-            decoding="async"
-          >
-        </figure>
+        <button
+          id="hand-ranking-open"
+          class="hand-ranking-open"
+          type="button"
+          aria-label="Open de korte spelregels op volledig scherm"
+        >
+          <figure class="hand-ranking-figure">
+            <img
+              src="big-two-handrangschikking.webp"
+              alt="Big Two handrangschikking van hoog naar laag, met kaartvolgorde, symboolvolgorde en de belangrijkste spelregels"
+              loading="lazy"
+              decoding="async"
+            >
+            <figcaption>🔍 Tik om te openen en in te zoomen</figcaption>
+          </figure>
+        </button>
 
         <details class="rules-details">
           <summary>📖 Volledige spelregels tonen</summary>
@@ -446,6 +454,36 @@
     </form>
   </dialog>
 
+  <dialog id="image-viewer-dialog" class="image-viewer-dialog" aria-label="Korte Big Two-spelregels">
+    <div class="image-viewer-shell">
+      <div class="image-viewer-toolbar">
+        <div>
+          <strong>Korte spelregels</strong>
+          <span id="image-zoom-label" aria-live="polite">100%</span>
+        </div>
+        <div class="image-viewer-actions">
+          <button id="image-zoom-out" class="image-viewer-button" type="button" aria-label="Uitzoomen" title="Uitzoomen">−</button>
+          <button id="image-zoom-reset" class="image-viewer-button image-viewer-reset" type="button" aria-label="Zoom herstellen" title="Zoom herstellen">100%</button>
+          <button id="image-zoom-in" class="image-viewer-button" type="button" aria-label="Inzoomen" title="Inzoomen">+</button>
+          <button id="image-viewer-close" class="image-viewer-button image-viewer-close" type="button" aria-label="Sluiten" title="Sluiten">×</button>
+        </div>
+      </div>
+
+      <div id="image-viewer-stage" class="image-viewer-stage">
+        <img
+          id="image-viewer-image"
+          src="big-two-handrangschikking.webp"
+          alt="Vergrote Big Two handrangschikking en korte spelregels"
+          draggable="false"
+        >
+      </div>
+
+      <p class="image-viewer-help">
+        Knijp of gebruik +/− om te zoomen. Sleep de afbeelding wanneer je bent ingezoomd.
+      </p>
+    </div>
+  </dialog>
+
   <dialog id="player-history-dialog" class="wide-dialog">
     <div class="dialog-card player-history-dialog-card">
       <div class="player-history-header">
@@ -500,7 +538,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8/dist/umd/supabase.js" integrity="sha384-M65KxMm/JqBppck6onbmAgPVMBHrmPCf1L17Q+71EcvI9/VVI8j5cqoxQf6lj6h2" crossorigin="anonymous"></script>
-  <script src="config.js?v=17"></script>
-  <script src="app.js?v=17"></script>
+  <script src="config.js?v=19"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>

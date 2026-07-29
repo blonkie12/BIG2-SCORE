@@ -1224,39 +1224,53 @@
   function bindEvents() {
     $$(".nav-button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
 
-    elements.handRankingOpen.addEventListener("click", openImageViewer);
-    elements.imageViewerClose.addEventListener("click", closeImageViewer);
-    elements.imageZoomIn.addEventListener("click", () => setImageZoom(imageZoom + 0.25));
-    elements.imageZoomOut.addEventListener("click", () => setImageZoom(imageZoom - 0.25));
-    elements.imageZoomReset.addEventListener("click", resetImageViewer);
+    const imageViewerReady = [
+      elements.handRankingOpen,
+      elements.imageViewerDialog,
+      elements.imageViewerStage,
+      elements.imageViewerImage,
+      elements.imageViewerClose,
+      elements.imageZoomIn,
+      elements.imageZoomOut,
+      elements.imageZoomReset,
+      elements.imageZoomLabel
+    ].every(Boolean);
 
-    elements.imageViewerDialog.addEventListener("click", (event) => {
-      if (event.target === elements.imageViewerDialog) closeImageViewer();
-    });
-    elements.imageViewerDialog.addEventListener("close", () => {
-      document.body.classList.remove("image-viewer-open");
-      resetImageViewer();
-    });
-    elements.imageViewerDialog.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      closeImageViewer();
-    });
+    if (imageViewerReady) {
+      elements.handRankingOpen.addEventListener("click", openImageViewer);
+      elements.imageViewerClose.addEventListener("click", closeImageViewer);
+      elements.imageZoomIn.addEventListener("click", () => setImageZoom(imageZoom + 0.25));
+      elements.imageZoomOut.addEventListener("click", () => setImageZoom(imageZoom - 0.25));
+      elements.imageZoomReset.addEventListener("click", resetImageViewer);
 
-    elements.imageViewerStage.addEventListener("wheel", (event) => {
-      event.preventDefault();
-      const factor = event.deltaY < 0 ? 1.15 : 0.87;
-      setImageZoom(imageZoom * factor, event.clientX, event.clientY);
-    }, { passive: false });
-    elements.imageViewerStage.addEventListener("dblclick", (event) => {
-      setImageZoom(imageZoom > 1 ? 1 : 2, event.clientX, event.clientY);
-    });
-    elements.imageViewerStage.addEventListener("pointerdown", handleImagePointerDown);
-    elements.imageViewerStage.addEventListener("pointermove", handleImagePointerMove);
-    elements.imageViewerStage.addEventListener("pointerup", handleImagePointerEnd);
-    elements.imageViewerStage.addEventListener("pointercancel", handleImagePointerEnd);
-    elements.imageViewerStage.addEventListener("pointerleave", (event) => {
-      if (event.pointerType === "mouse" && event.buttons === 0) handleImagePointerEnd(event);
-    });
+      elements.imageViewerDialog.addEventListener("click", (event) => {
+        if (event.target === elements.imageViewerDialog) closeImageViewer();
+      });
+      elements.imageViewerDialog.addEventListener("close", () => {
+        document.body.classList.remove("image-viewer-open");
+        resetImageViewer();
+      });
+      elements.imageViewerDialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        closeImageViewer();
+      });
+
+      elements.imageViewerStage.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const factor = event.deltaY < 0 ? 1.15 : 0.87;
+        setImageZoom(imageZoom * factor, event.clientX, event.clientY);
+      }, { passive: false });
+      elements.imageViewerStage.addEventListener("dblclick", (event) => {
+        setImageZoom(imageZoom > 1 ? 1 : 2, event.clientX, event.clientY);
+      });
+      elements.imageViewerStage.addEventListener("pointerdown", handleImagePointerDown);
+      elements.imageViewerStage.addEventListener("pointermove", handleImagePointerMove);
+      elements.imageViewerStage.addEventListener("pointerup", handleImagePointerEnd);
+      elements.imageViewerStage.addEventListener("pointercancel", handleImagePointerEnd);
+      elements.imageViewerStage.addEventListener("pointerleave", (event) => {
+        if (event.pointerType === "mouse" && event.buttons === 0) handleImagePointerEnd(event);
+      });
+    }
     elements.participantChips.addEventListener("change", (event) => {
       const checkbox = event.target.closest('input[type="checkbox"]'); if (!checkbox) return;
       if (checkbox.checked && selectedPlayers.size >= 8) {
@@ -1326,7 +1340,7 @@
   async function init() {
     try { setupMode(); bindEvents(); await ensureLoaded(); }
     catch (error) { elements.modeBanner.hidden = false; elements.modeBanner.textContent = error.message; showToast(error.message, true); }
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=18", { updateViaCache: "none" }).catch(() => {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19", { updateViaCache: "none" }).catch(() => {});
   }
 
   init();
