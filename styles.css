@@ -371,6 +371,23 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
 
 /* Spelregels en handrangschikking op het dashboard */
 .game-rules-panel { overflow: hidden; }
+.hand-ranking-open {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  text-align: inherit;
+  cursor: zoom-in;
+}
+.hand-ranking-open:focus-visible {
+  outline: 3px solid var(--accent-2);
+  outline-offset: 4px;
+}
 .hand-ranking-figure {
   margin: 0;
   padding: 0;
@@ -383,6 +400,20 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
   display: block;
   width: 100%;
   height: auto;
+}
+.hand-ranking-figure figcaption {
+  display: flex;
+  justify-content: center;
+  padding: 10px 12px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  background: rgba(255,255,255,.025);
+  font-size: .78rem;
+  font-weight: 750;
+}
+.hand-ranking-open:hover .hand-ranking-figure,
+.hand-ranking-open:focus-visible .hand-ranking-figure {
+  border-color: rgba(251,191,36,.6);
 }
 .rules-details {
   margin-top: 14px;
@@ -624,3 +655,151 @@ dialog::backdrop { background: rgba(0,0,0,.72); backdrop-filter: blur(4px); }
   .nav-button span { font-size: .95rem; }
   .score-row { grid-template-columns: minmax(0, 1fr) 92px; }
 }
+
+
+/* Schermvullende afbeeldingsviewer met zoom en slepen */
+body.image-viewer-open { overflow: hidden; }
+
+dialog.image-viewer-dialog {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(2, 10, 20, .98);
+  box-shadow: none;
+}
+dialog.image-viewer-dialog::backdrop {
+  background: rgba(0,0,0,.92);
+  backdrop-filter: blur(7px);
+}
+.image-viewer-shell {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.image-viewer-toolbar {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    10px
+    max(12px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line);
+  background: rgba(8,19,33,.96);
+}
+.image-viewer-toolbar > div:first-child {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.image-viewer-toolbar strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-viewer-toolbar span {
+  flex: none;
+  color: var(--muted);
+  font-size: .78rem;
+}
+.image-viewer-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+}
+.image-viewer-button {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 6px 10px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 1.15rem;
+  font-weight: 850;
+}
+.image-viewer-button:active { transform: translateY(1px); }
+.image-viewer-reset {
+  min-width: 66px;
+  font-size: .74rem;
+}
+.image-viewer-close {
+  margin-left: 4px;
+  color: #fecdd3;
+  font-size: 1.35rem;
+}
+.image-viewer-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  cursor: zoom-in;
+  touch-action: none;
+  user-select: none;
+  overscroll-behavior: contain;
+}
+.image-viewer-stage.is-zoomed { cursor: grab; }
+.image-viewer-stage.is-zoomed:active { cursor: grabbing; }
+.image-viewer-stage img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.image-viewer-help {
+  margin: 0;
+  padding:
+    9px
+    max(14px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  background: rgba(8,19,33,.96);
+  text-align: center;
+  font-size: .76rem;
+}
+
+@media (max-width: 540px) {
+  .image-viewer-toolbar {
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .image-viewer-toolbar > div:first-child {
+    display: grid;
+    gap: 1px;
+  }
+  .image-viewer-actions { gap: 4px; }
+  .image-viewer-button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 4px 7px;
+  }
+  .image-viewer-reset { min-width: 56px; }
+  .image-viewer-stage { padding: 6px; }
+  .image-viewer-help { font-size: .68rem; }
+}
+

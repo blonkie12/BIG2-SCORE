@@ -43,7 +43,16 @@
     playerOpponentRankingLeader: $("#player-opponent-ranking-leader"),
     playerOpponentWinsLeader: $("#player-opponent-wins-leader"),
     playerOpponentList: $("#player-opponent-list"),
-    playerHistoryCount: $("#player-history-count"), playerHistoryGames: $("#player-history-games")
+    playerHistoryCount: $("#player-history-count"), playerHistoryGames: $("#player-history-games"),
+    handRankingOpen: $("#hand-ranking-open"),
+    imageViewerDialog: $("#image-viewer-dialog"),
+    imageViewerStage: $("#image-viewer-stage"),
+    imageViewerImage: $("#image-viewer-image"),
+    imageViewerClose: $("#image-viewer-close"),
+    imageZoomIn: $("#image-zoom-in"),
+    imageZoomOut: $("#image-zoom-out"),
+    imageZoomReset: $("#image-zoom-reset"),
+    imageZoomLabel: $("#image-zoom-label")
   };
 
   let state = { group: { name: "Big Two Vakantiestand" }, players: [], games: [], logs: [] };
@@ -54,6 +63,12 @@
   let editingCardValues = new Map();
   let historyStart = "";
   let historyEnd = "";
+  let imageZoom = 1;
+  let imagePanX = 0;
+  let imagePanY = 0;
+  let imageDragStart = null;
+  let imagePinchStart = null;
+  const imagePointers = new Map();
   let backend;
 
   const escapeHtml = (value) => String(value ?? "")
@@ -1071,8 +1086,177 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+
+  function clampImageZoom(value) {
+    return Math.min(5, Math.max(1, value));
+  }
+
+  function constrainImagePan() {
+    if (imageZoom <= 1) {
+      imagePanX = 0;
+      imagePanY = 0;
+      return;
+    }
+    const stage = elements.imageViewerStage?.getBoundingClientRect();
+    const image = elements.imageViewerImage?.getBoundingClientRect();
+    if (!stage || !image) return;
+
+    const maxX = Math.max(0, (image.width - stage.width) / 2 / imageZoom + stage.width * 0.35);
+    const maxY = Math.max(0, (image.height - stage.height) / 2 / imageZoom + stage.height * 0.35);
+    imagePanX = Math.max(-maxX, Math.min(maxX, imagePanX));
+    imagePanY = Math.max(-maxY, Math.min(maxY, imagePanY));
+  }
+
+  function renderImageZoom() {
+    if (!elements.imageViewerImage) return;
+    constrainImagePan();
+    elements.imageViewerImage.style.transform =
+      `translate3d(${imagePanX}px, ${imagePanY}px, 0) scale(${imageZoom})`;
+    elements.imageZoomLabel.textContent = `${Math.round(imageZoom * 100)}%`;
+    elements.imageZoomReset.textContent = `${Math.round(imageZoom * 100)}%`;
+    elements.imageViewerStage.classList.toggle("is-zoomed", imageZoom > 1);
+  }
+
+  function setImageZoom(nextZoom, focalX = null, focalY = null) {
+    const previousZoom = imageZoom;
+    imageZoom = clampImageZoom(nextZoom);
+
+    if (focalX !== null && focalY !== null && previousZoom > 0) {
+      const stage = elements.imageViewerStage.getBoundingClientRect();
+      const localX = focalX - stage.left - stage.width / 2;
+      const localY = focalY - stage.top - stage.height / 2;
+      const ratio = imageZoom / previousZoom;
+      imagePanX = localX - (localX - imagePanX) * ratio;
+      imagePanY = localY - (localY - imagePanY) * ratio;
+    }
+
+    renderImageZoom();
+  }
+
+  function resetImageViewer() {
+    imageZoom = 1;
+    imagePanX = 0;
+    imagePanY = 0;
+    imageDragStart = null;
+    imagePinchStart = null;
+    imagePointers.clear();
+    renderImageZoom();
+  }
+
+  function openImageViewer() {
+    resetImageViewer();
+    elements.imageViewerDialog.showModal();
+    document.body.classList.add("image-viewer-open");
+  }
+
+  function closeImageViewer() {
+    if (elements.imageViewerDialog.open) elements.imageViewerDialog.close();
+    document.body.classList.remove("image-viewer-open");
+    resetImageViewer();
+  }
+
+  function pointerDistance(points) {
+    const [a, b] = points;
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  }
+
+  function pointerCenter(points) {
+    const [a, b] = points;
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  function handleImagePointerDown(event) {
+    elements.imageViewerStage.setPointerCapture?.(event.pointerId);
+    imagePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (imagePointers.size === 1) {
+      imageDragStart = {
+        x: event.clientX,
+        y: event.clientY,
+        panX: imagePanX,
+        panY: imagePanY
+      };
+    } else if (imagePointers.size === 2) {
+      const points = [...imagePointers.values()];
+      imagePinchStart = {
+        distance: pointerDistance(points),
+        zoom: imageZoom,
+        center: pointerCenter(points)
+      };
+      imageDragStart = null;
+    }
+  }
+
+  function handleImagePointerMove(event) {
+    if (!imagePointers.has(event.pointerId)) return;
+    imagePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (imagePointers.size === 2 && imagePinchStart) {
+      event.preventDefault();
+      const points = [...imagePointers.values()];
+      const distance = pointerDistance(points);
+      const center = pointerCenter(points);
+      const nextZoom = imagePinchStart.zoom * (distance / Math.max(1, imagePinchStart.distance));
+      setImageZoom(nextZoom, center.x, center.y);
+      return;
+    }
+
+    if (imagePointers.size === 1 && imageDragStart && imageZoom > 1) {
+      event.preventDefault();
+      imagePanX = imageDragStart.panX + (event.clientX - imageDragStart.x) / imageZoom;
+      imagePanY = imageDragStart.panY + (event.clientY - imageDragStart.y) / imageZoom;
+      renderImageZoom();
+    }
+  }
+
+  function handleImagePointerEnd(event) {
+    imagePointers.delete(event.pointerId);
+    if (imagePointers.size === 1) {
+      const remaining = [...imagePointers.values()][0];
+      imageDragStart = { x: remaining.x, y: remaining.y, panX: imagePanX, panY: imagePanY };
+      imagePinchStart = null;
+    } else if (imagePointers.size === 0) {
+      imageDragStart = null;
+      imagePinchStart = null;
+    }
+  }
+
   function bindEvents() {
     $$(".nav-button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+
+    elements.handRankingOpen.addEventListener("click", openImageViewer);
+    elements.imageViewerClose.addEventListener("click", closeImageViewer);
+    elements.imageZoomIn.addEventListener("click", () => setImageZoom(imageZoom + 0.25));
+    elements.imageZoomOut.addEventListener("click", () => setImageZoom(imageZoom - 0.25));
+    elements.imageZoomReset.addEventListener("click", resetImageViewer);
+
+    elements.imageViewerDialog.addEventListener("click", (event) => {
+      if (event.target === elements.imageViewerDialog) closeImageViewer();
+    });
+    elements.imageViewerDialog.addEventListener("close", () => {
+      document.body.classList.remove("image-viewer-open");
+      resetImageViewer();
+    });
+    elements.imageViewerDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeImageViewer();
+    });
+
+    elements.imageViewerStage.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 1.15 : 0.87;
+      setImageZoom(imageZoom * factor, event.clientX, event.clientY);
+    }, { passive: false });
+    elements.imageViewerStage.addEventListener("dblclick", (event) => {
+      setImageZoom(imageZoom > 1 ? 1 : 2, event.clientX, event.clientY);
+    });
+    elements.imageViewerStage.addEventListener("pointerdown", handleImagePointerDown);
+    elements.imageViewerStage.addEventListener("pointermove", handleImagePointerMove);
+    elements.imageViewerStage.addEventListener("pointerup", handleImagePointerEnd);
+    elements.imageViewerStage.addEventListener("pointercancel", handleImagePointerEnd);
+    elements.imageViewerStage.addEventListener("pointerleave", (event) => {
+      if (event.pointerType === "mouse" && event.buttons === 0) handleImagePointerEnd(event);
+    });
     elements.participantChips.addEventListener("change", (event) => {
       const checkbox = event.target.closest('input[type="checkbox"]'); if (!checkbox) return;
       if (checkbox.checked && selectedPlayers.size >= 8) {
@@ -1142,7 +1326,7 @@
   async function init() {
     try { setupMode(); bindEvents(); await ensureLoaded(); }
     catch (error) { elements.modeBanner.hidden = false; elements.modeBanner.textContent = error.message; showToast(error.message, true); }
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=17", { updateViaCache: "none" }).catch(() => {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=18", { updateViaCache: "none" }).catch(() => {});
   }
 
   init();

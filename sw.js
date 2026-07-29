@@ -1,10 +1,10 @@
-const CACHE = "big2-v17-mobile-nav";
+const CACHE = "big2-v18-image-zoom";
 const ASSETS = [
   "./",
   "index.html",
-  "styles.css?v=17",
-  "app.js?v=17",
-  "config.js?v=17",
+  "styles.css?v=18",
+  "app.js?v=18",
+  "config.js?v=18",
   "icon.svg",
   "manifest.webmanifest",
   "big-two-handrangschikking.webp"
