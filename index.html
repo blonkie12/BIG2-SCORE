@@ -8,7 +8,7 @@
   <title>Big Two Vakantiestand</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=19">
+  <link rel="stylesheet" href="styles.css?v=21">
 </head>
 <body>
   <header class="app-header">
@@ -23,6 +23,13 @@
   </header>
 
   <div id="mode-banner" class="mode-banner" hidden></div>
+  <section id="offline-banner" class="offline-banner" aria-live="polite" hidden>
+    <div class="offline-banner-copy">
+      <strong id="offline-title">Offline — stand gepauzeerd</strong>
+      <span id="offline-detail">De laatst gesynchroniseerde stand blijft zichtbaar.</span>
+    </div>
+    <button id="sync-button" class="sync-button" type="button">Nu synchroniseren</button>
+  </section>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <main class="app-shell">
@@ -238,6 +245,13 @@
         </label>
 
         <div id="game-validation" class="validation-message" hidden></div>
+        <p id="offline-entry-note" class="offline-entry-note" hidden>
+          Je bent offline. Dit potje wordt alleen op dit apparaat bewaard en later gesynchroniseerd.
+          De ranglijst blijft tot die tijd ongewijzigd.
+        </p>
+        <p class="device-time-note">
+          Datum en tijd worden bij het opslaan rechtstreeks van deze telefoon overgenomen.
+        </p>
         <button class="primary-button" type="submit">Potje opslaan</button>
       </form>
     </section>
@@ -536,9 +550,7 @@
       </div>
     </form>
   </dialog>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.8/dist/umd/supabase.js" integrity="sha384-M65KxMm/JqBppck6onbmAgPVMBHrmPCf1L17Q+71EcvI9/VVI8j5cqoxQf6lj6h2" crossorigin="anonymous"></script>
-  <script src="config.js?v=19"></script>
-  <script src="app.js?v=19"></script>
+  <script src="config.js?v=21"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

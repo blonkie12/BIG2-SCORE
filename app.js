@@ -52,7 +52,12 @@
     imageZoomIn: $("#image-zoom-in"),
     imageZoomOut: $("#image-zoom-out"),
     imageZoomReset: $("#image-zoom-reset"),
-    imageZoomLabel: $("#image-zoom-label")
+    imageZoomLabel: $("#image-zoom-label"),
+    offlineBanner: $("#offline-banner"),
+    offlineTitle: $("#offline-title"),
+    offlineDetail: $("#offline-detail"),
+    syncButton: $("#sync-button"),
+    offlineEntryNote: $("#offline-entry-note")
   };
 
   let state = { group: { name: "Big Two Vakantiestand" }, players: [], games: [], logs: [] };
@@ -70,6 +75,10 @@
   let imagePinchStart = null;
   const imagePointers = new Map();
   let backend;
+  let offlineStore;
+  let syncingPendingGames = false;
+  let serverReachable = navigator.onLine;
+  let lastSyncedAt = null;
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -96,14 +105,52 @@
     ? new Intl.DateTimeFormat("nl-NL", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(`${value}T12:00:00`))
     : "";
 
+  function gameTimestamp(game) {
+    const value = new Date(game?.played_at || game?.created_at || 0).getTime();
+    return Number.isFinite(value) ? value : 0;
+  }
+
   function normalizeState(next) {
     const group = { ...(next?.group || { name: "Big Two Vakantiestand" }) };
     if (!RANKING_CRITERIA[group.ranking_criterion]) group.ranking_criterion = DEFAULT_RANKING_CRITERION;
+
+    const games = Array.isArray(next?.games) ? [...next.games] : [];
+    games.sort((a, b) => {
+      const playedDifference = gameTimestamp(b) - gameTimestamp(a);
+      if (playedDifference !== 0) return playedDifference;
+
+      const createdDifference =
+        new Date(b?.created_at || 0).getTime() -
+        new Date(a?.created_at || 0).getTime();
+      if (Number.isFinite(createdDifference) && createdDifference !== 0) {
+        return createdDifference;
+      }
+
+      return String(b?.id || "").localeCompare(String(a?.id || ""));
+    });
+
     return {
       group,
       players: Array.isArray(next?.players) ? next.players : [],
-      games: Array.isArray(next?.games) ? next.games : [],
+      games,
       logs: Array.isArray(next?.logs) ? next.logs : []
+    };
+  }
+
+  function captureDeviceTime() {
+    const now = new Date();
+    let timeZone = null;
+
+    try {
+      timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+    } catch {
+      timeZone = null;
+    }
+
+    return {
+      played_at: now.toISOString(),
+      client_timezone: timeZone,
+      client_utc_offset_minutes: -now.getTimezoneOffset()
     };
   }
 
@@ -131,6 +178,106 @@
       id: uuid(), action, actor_player_id: actor?.id || null, actor_name: actor?.name || "Onbekend",
       entity_type: entityType, entity_id: entityId, details, created_at: new Date().toISOString()
     };
+  }
+
+
+  class OfflineStore {
+    constructor() {
+      this.name = "big2-offline-v1";
+      this.db = null;
+    }
+
+    open() {
+      if (this.db) return Promise.resolve(this.db);
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(this.name, 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains("state")) {
+            db.createObjectStore("state", { keyPath: "key" });
+          }
+          if (!db.objectStoreNames.contains("pending_games")) {
+            const store = db.createObjectStore("pending_games", { keyPath: "client_game_id" });
+            store.createIndex("group_slug", "group_slug", { unique: false });
+            store.createIndex("created_at", "created_at", { unique: false });
+          }
+        };
+        request.onsuccess = () => {
+          this.db = request.result;
+          resolve(this.db);
+        };
+        request.onerror = () => reject(request.error || new Error("Offline-opslag kon niet worden geopend."));
+      });
+    }
+
+    transaction(storeName, mode, callback) {
+      return this.open().then((db) => new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeName, mode);
+        const store = transaction.objectStore(storeName);
+        let request;
+        try {
+          request = callback(store);
+        } catch (error) {
+          reject(error);
+          return;
+        }
+        transaction.oncomplete = () => resolve(request?.result);
+        transaction.onerror = () => reject(transaction.error || request?.error || new Error("Offline-opslag is mislukt."));
+        transaction.onabort = () => reject(transaction.error || new Error("Offline-opslag is afgebroken."));
+      }));
+    }
+
+    putState(groupSlug, nextState, syncedAt = new Date().toISOString()) {
+      return this.transaction("state", "readwrite", (store) =>
+        store.put({
+          key: groupSlug,
+          state: normalizeState(nextState),
+          synced_at: syncedAt
+        })
+      );
+    }
+
+    getState(groupSlug) {
+      return this.open().then((db) => new Promise((resolve, reject) => {
+        const request = db.transaction("state", "readonly").objectStore("state").get(groupSlug);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      }));
+    }
+
+    addPendingGame(record) {
+      return this.transaction("pending_games", "readwrite", (store) => store.put(record));
+    }
+
+    updatePendingGame(record) {
+      return this.transaction("pending_games", "readwrite", (store) => store.put(record));
+    }
+
+    deletePendingGame(clientGameId) {
+      return this.transaction("pending_games", "readwrite", (store) => store.delete(clientGameId));
+    }
+
+    getPendingGames(groupSlug) {
+      return this.open().then((db) => new Promise((resolve, reject) => {
+        const transaction = db.transaction("pending_games", "readonly");
+        const index = transaction.objectStore("pending_games").index("group_slug");
+        const request = index.getAll(groupSlug);
+        request.onsuccess = () => {
+          const rows = Array.isArray(request.result) ? request.result : [];
+          rows.sort((a, b) => {
+            const aTime = a?.payload?.played_at || a?.played_at || a?.created_at || "";
+            const bTime = b?.payload?.played_at || b?.played_at || b?.created_at || "";
+            return String(aTime).localeCompare(String(bTime));
+          });
+          resolve(rows);
+        };
+        request.onerror = () => reject(request.error);
+      }));
+    }
+
+    async countPendingGames(groupSlug) {
+      return (await this.getPendingGames(groupSlug)).length;
+    }
   }
 
   class DemoBackend {
@@ -229,62 +376,129 @@
 
   class SupabaseBackend {
     constructor() {
-      if (!window.supabase) throw new Error("Supabase-bibliotheek kon niet worden geladen.");
-      this.client = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey, {
-        auth: { persistSession: false, autoRefreshToken: false }
-      });
+      this.baseUrl = String(config.supabaseUrl || "").replace(/\/+$/, "");
+      this.key = String(config.supabasePublishableKey || "");
+      if (!this.baseUrl || !this.key) throw new Error("Supabase-configuratie ontbreekt.");
     }
+
     async rpc(functionName, params) {
-      const { data, error } = await this.client.rpc(functionName, params);
-      if (error) throw new Error(error.message || "Databasefout");
+      let response;
+      try {
+        response = await fetch(`${this.baseUrl}/rest/v1/rpc/${functionName}`, {
+          method: "POST",
+          headers: {
+            "apikey": this.key,
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(params || {}),
+          cache: "no-store"
+        });
+      } catch (error) {
+        const networkError = new Error("Geen verbinding met Supabase.");
+        networkError.name = "NetworkError";
+        networkError.cause = error;
+        throw networkError;
+      }
+
+      const raw = await response.text();
+      let data = null;
+      if (raw) {
+        try { data = JSON.parse(raw); }
+        catch { data = raw; }
+      }
+
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.hint ||
+          data?.details ||
+          (typeof data === "string" ? data : "") ||
+          `Databasefout (${response.status})`;
+        throw new Error(message);
+      }
+
       return normalizeState(data);
     }
-    bootstrap() { return this.rpc("big2_bootstrap", { p_slug: config.groupSlug }); }
+
+    bootstrap() {
+      return this.rpc("big2_bootstrap", { p_slug: config.groupSlug });
+    }
+
     logAccess(actor) {
       return this.rpc("big2_log_access", {
-        p_slug: config.groupSlug, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend"
+        p_slug: config.groupSlug,
+        p_actor_id: actor?.id || null,
+        p_actor_name: actor?.name || "Onbekend"
       });
     }
-    addGame(payload, actor) {
-      return this.rpc("big2_add_game", {
-        p_slug: config.groupSlug, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
-        p_entered_by: payload.entered_by, p_winner: payload.winner, p_entries: payload.entries, p_note: payload.note || null
+
+    addGame(payload, actor, clientGameId = uuid()) {
+      const fallbackTime = captureDeviceTime();
+      return this.rpc("big2_add_game_v3", {
+        p_slug: config.groupSlug,
+        p_client_game_id: clientGameId,
+        p_played_at: payload.played_at || fallbackTime.played_at,
+        p_client_timezone: payload.client_timezone || fallbackTime.client_timezone,
+        p_client_utc_offset_minutes:
+          Number.isInteger(payload.client_utc_offset_minutes)
+            ? payload.client_utc_offset_minutes
+            : fallbackTime.client_utc_offset_minutes,
+        p_actor_id: actor?.id || null,
+        p_actor_name: actor?.name || "Onbekend",
+        p_entered_by: payload.entered_by,
+        p_winner: payload.winner,
+        p_entries: payload.entries,
+        p_note: payload.note || null
       });
     }
+
     updateGame(id, payload, adminPin, actor) {
       return this.rpc("big2_admin_update_game", {
-        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
         p_game_id: id, p_entered_by: payload.entered_by, p_winner: payload.winner,
         p_entries: payload.entries, p_note: payload.note || null
       });
     }
+
     addPlayers(names, adminPin, actor) {
       return this.rpc("big2_admin_add_players", {
-        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null,
-        p_actor_name: actor?.name || "Onbekend", p_names: names
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_names: names
       });
     }
+
     setPlayerActive(id, active, adminPin, actor) {
       return this.rpc("big2_admin_set_player_active", {
-        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
         p_player_id: id, p_active: active
       });
     }
+
     deletePlayer(id, adminPin, actor) {
       return this.rpc("big2_admin_delete_player", {
-        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
         p_player_id: id
       });
     }
+
     setRankingCriterion(criterion, adminPin, actor) {
       return this.rpc("big2_admin_set_ranking", {
-        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
         p_criterion: criterion
       });
     }
+
     deleteGame(id, adminPin, actor) {
       return this.rpc("big2_admin_delete_game", {
-        p_slug: config.groupSlug, p_admin_pin: adminPin, p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend", p_game_id: id
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_game_id: id
       });
     }
   }
@@ -300,6 +514,205 @@
   function showValidation(message, target = elements.gameValidation) {
     target.textContent = message;
     target.hidden = !message;
+  }
+
+
+  function isNetworkFailure(error) {
+    return !navigator.onLine ||
+      error?.name === "NetworkError" ||
+      error instanceof TypeError ||
+      /failed to fetch|networkerror|load failed|geen verbinding/i.test(String(error?.message || ""));
+  }
+
+  function requireOnlineAction() {
+    if (!config.demoMode && (!navigator.onLine || !serverReachable)) {
+      throw new Error("Deze beheeractie is alleen online beschikbaar.");
+    }
+  }
+
+  async function applyServerState(nextState) {
+    state = normalizeState(nextState);
+    serverReachable = true;
+    lastSyncedAt = new Date().toISOString();
+    if (!config.demoMode && offlineStore) {
+      await offlineStore.putState(config.groupSlug, state, lastSyncedAt);
+    }
+    return state;
+  }
+
+  async function loadCachedState() {
+    if (config.demoMode || !offlineStore) return null;
+    const cached = await offlineStore.getState(config.groupSlug);
+    if (!cached?.state) return null;
+    lastSyncedAt = cached.synced_at || null;
+    return normalizeState(cached.state);
+  }
+
+  function formatSyncMoment(value) {
+    if (!value) return "nog niet";
+    try {
+      return new Intl.DateTimeFormat("nl-NL", {
+        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+      }).format(new Date(value));
+    } catch {
+      return "onbekend";
+    }
+  }
+
+  async function updateOfflineStatus() {
+    if (!elements.offlineBanner || config.demoMode || !offlineStore) {
+      if (elements.offlineBanner) elements.offlineBanner.hidden = true;
+      return;
+    }
+
+    const pendingCount = await offlineStore.countPendingGames(config.groupSlug);
+    const connectionUnavailable = !navigator.onLine || !serverReachable;
+
+    elements.offlineEntryNote.hidden = !connectionUnavailable;
+    elements.syncButton.disabled = syncingPendingGames || connectionUnavailable || pendingCount === 0;
+    elements.syncButton.hidden = pendingCount === 0;
+    elements.offlineBanner.classList.toggle("is-online-pending", !connectionUnavailable && pendingCount > 0);
+    elements.offlineBanner.classList.toggle("is-syncing", syncingPendingGames);
+
+    if (syncingPendingGames) {
+      elements.offlineTitle.textContent = "Potjes synchroniseren…";
+      elements.offlineDetail.textContent = `${pendingCount} potje${pendingCount === 1 ? "" : "s"} in de wachtrij.`;
+      elements.offlineBanner.hidden = false;
+      return;
+    }
+
+    if (connectionUnavailable) {
+      elements.offlineTitle.textContent = "Offline — stand gepauzeerd";
+      const pendingText = pendingCount
+        ? ` ${pendingCount} potje${pendingCount === 1 ? "" : "s"} wacht${pendingCount === 1 ? "" : "en"} op synchronisatie.`
+        : "";
+      elements.offlineDetail.textContent =
+        `Laatst gesynchroniseerd: ${formatSyncMoment(lastSyncedAt)}.${pendingText}`;
+      elements.offlineBanner.hidden = false;
+      return;
+    }
+
+    if (pendingCount > 0) {
+      elements.offlineTitle.textContent =
+        `${pendingCount} potje${pendingCount === 1 ? "" : "s"} wacht${pendingCount === 1 ? "" : "en"} op synchronisatie`;
+      elements.offlineDetail.textContent =
+        "De officiële stand blijft ongewijzigd tot de synchronisatie is voltooid.";
+      elements.offlineBanner.hidden = false;
+      return;
+    }
+
+    elements.offlineBanner.hidden = true;
+  }
+
+  function resetGameEntryForm() {
+    selectedPlayers.clear();
+    elements.gameForm.reset();
+    renderEntry();
+  }
+
+  async function queueOfflineGame(payload, actor, clientGameId) {
+    const queuedAt = new Date().toISOString();
+    const playedAt = payload.played_at || queuedAt;
+
+    await offlineStore.addPendingGame({
+      client_game_id: clientGameId,
+      group_slug: config.groupSlug,
+      payload: { ...payload, played_at: playedAt },
+      actor,
+      played_at: playedAt,
+      created_at: queuedAt,
+      attempts: 0,
+      last_error: null
+    });
+    resetGameEntryForm();
+    await updateOfflineStatus();
+    switchView("dashboard");
+    showToast("Potje offline opgeslagen met de datum en tijd van deze telefoon. De stand wordt bijgewerkt na synchronisatie.");
+  }
+
+  async function syncPendingGames({ silent = false } = {}) {
+    if (config.demoMode || syncingPendingGames || !offlineStore) return;
+    if (!navigator.onLine) {
+      serverReachable = false;
+      await updateOfflineStatus();
+      if (!silent) showToast("Nog geen internetverbinding.", true);
+      return;
+    }
+
+    const pending = await offlineStore.getPendingGames(config.groupSlug);
+    if (!pending.length) {
+      await updateOfflineStatus();
+      if (!silent) showToast("Er staan geen potjes te wachten.");
+      return;
+    }
+
+    syncingPendingGames = true;
+    serverReachable = true;
+    await updateOfflineStatus();
+
+    let synced = 0;
+    let validationFailures = 0;
+
+    try {
+      for (const record of pending) {
+        try {
+          const synchronizedPayload = {
+            ...record.payload,
+            played_at:
+              record?.payload?.played_at ||
+              record?.played_at ||
+              record?.created_at ||
+              new Date().toISOString()
+          };
+
+          const nextState = await backend.addGame(
+            synchronizedPayload,
+            record.actor,
+            record.client_game_id
+          );
+          await offlineStore.deletePendingGame(record.client_game_id);
+          await applyServerState(nextState);
+          synced += 1;
+        } catch (error) {
+          if (isNetworkFailure(error)) {
+            serverReachable = false;
+            break;
+          }
+          validationFailures += 1;
+          await offlineStore.updatePendingGame({
+            ...record,
+            attempts: Number(record.attempts || 0) + 1,
+            last_error: String(error.message || error)
+          });
+        }
+      }
+
+      if (serverReachable) {
+        try {
+          await applyServerState(await backend.bootstrap());
+        } catch (error) {
+          if (isNetworkFailure(error)) serverReachable = false;
+          else throw error;
+        }
+      }
+
+      renderAll();
+
+      if (!silent) {
+        if (synced && !validationFailures) {
+          showToast(`${synced} potje${synced === 1 ? "" : "s"} gesynchroniseerd.`);
+        } else if (synced && validationFailures) {
+          showToast(`${synced} potje${synced === 1 ? "" : "s"} gesynchroniseerd; ${validationFailures} kon niet worden verwerkt.`, true);
+        } else if (validationFailures) {
+          showToast("Een offline potje kon niet worden verwerkt. Controleer de invoer zodra je online bent.", true);
+        } else if (!serverReachable) {
+          showToast("Synchronisatie onderbroken: geen verbinding.", true);
+        }
+      }
+    } finally {
+      syncingPendingGames = false;
+      await updateOfflineStatus();
+    }
   }
 
   function setupMode() {
@@ -357,20 +770,59 @@
   }
 
   async function logAccessOnce(actor, force = false) {
+    if (!actor || (!config.demoMode && (!navigator.onLine || !serverReachable))) return;
     const sessionKey = `big2-access-logged:${state.group?.slug || config.groupSlug || "demo"}:${currentActorKey}`;
     if (!force && sessionStorage.getItem(sessionKey)) return;
-    state = await backend.logAccess(actor);
+    const nextState = await backend.logAccess(actor);
+    if (config.demoMode) state = normalizeState(nextState);
+    else await applyServerState(nextState);
     sessionStorage.setItem(sessionKey, "1");
   }
 
   async function ensureLoaded() {
     try {
-      state = normalizeState(await backend.bootstrap());
-      // Toon de stand direct; de gebruikerskeuze mag de pagina niet leeg houden.
+      let loadedFromServer = false;
+
+      if (config.demoMode) {
+        state = normalizeState(await backend.bootstrap());
+        serverReachable = true;
+      } else if (navigator.onLine) {
+        try {
+          await applyServerState(await backend.bootstrap());
+          loadedFromServer = true;
+        } catch (error) {
+          if (!isNetworkFailure(error)) throw error;
+          serverReachable = false;
+          const cached = await loadCachedState();
+          if (!cached) throw new Error("Geen verbinding en er is nog geen offline stand opgeslagen. Open de site eerst één keer met internet.");
+          state = cached;
+        }
+      } else {
+        serverReachable = false;
+        const cached = await loadCachedState();
+        if (!cached) throw new Error("Geen internet en er is nog geen offline stand opgeslagen. Open de site eerst één keer online.");
+        state = cached;
+      }
+
       renderAll();
+      await updateOfflineStatus();
+
       const actor = await requestIdentity(false);
-      if (actor) await logAccessOnce(actor, false);
+      if (actor && (config.demoMode || loadedFromServer)) {
+        try {
+          await logAccessOnce(actor, false);
+        } catch (error) {
+          if (isNetworkFailure(error)) serverReachable = false;
+          else showToast(error.message, true);
+        }
+      }
+
       renderAll();
+      await updateOfflineStatus();
+
+      if (!config.demoMode && navigator.onLine) {
+        await syncPendingGames({ silent: true });
+      }
     } catch (error) {
       showToast(error.message, true);
       throw error;
@@ -856,25 +1308,75 @@
   }
 
   async function handleGameSubmit(event) {
-    event.preventDefault(); showValidation("");
+    event.preventDefault();
+    showValidation("");
+
     const winner = elements.winnerSelect.value;
     const enteredBy = elements.enteredBySelect.value;
-    if (selectedPlayers.size < 2 || selectedPlayers.size > 8) return showValidation("Selecteer 2 tot 8 spelers.");
-    if (!winner || !enteredBy) return showValidation("Kies de winnaar en de invoerder.");
+    if (selectedPlayers.size < 2 || selectedPlayers.size > 8) {
+      return showValidation("Selecteer 2 tot 8 spelers.");
+    }
+    if (!winner || !enteredBy) {
+      return showValidation("Kies de winnaar en de invoerder.");
+    }
+
     let entries;
-    try { entries = validateEntries(selectedPlayers, winner, (id) => `[data-card-player="${id}"]`); }
-    catch (error) { return showValidation(error.message); }
     try {
-      const submit = elements.gameForm.querySelector("button[type=submit]"); submit.disabled = true;
-      state = await backend.addGame({ entered_by: enteredBy, winner, entries, note: elements.gameNote.value.trim() }, await requireActor());
-      selectedPlayers.clear(); elements.gameForm.reset(); renderAll(); switchView("dashboard");
-      showToast("Potje opgeslagen.");
-    } catch (error) { showToast(error.message, true); }
-    finally { elements.gameForm.querySelector("button[type=submit]").disabled = false; }
+      entries = validateEntries(selectedPlayers, winner, (id) => `[data-card-player="${id}"]`);
+    } catch (error) {
+      return showValidation(error.message);
+    }
+
+    const deviceTime = captureDeviceTime();
+    const payload = {
+      entered_by: enteredBy,
+      winner,
+      entries,
+      note: elements.gameNote.value.trim(),
+      played_at: deviceTime.played_at,
+      client_timezone: deviceTime.client_timezone,
+      client_utc_offset_minutes: deviceTime.client_utc_offset_minutes
+    };
+    const clientGameId = uuid();
+    const submit = elements.gameForm.querySelector("button[type=submit]");
+
+    try {
+      submit.disabled = true;
+      const actor = await requireActor();
+
+      if (!config.demoMode && (!navigator.onLine || !serverReachable)) {
+        await queueOfflineGame(payload, actor, clientGameId);
+        return;
+      }
+
+      try {
+        const nextState = await backend.addGame(payload, actor, clientGameId);
+        if (config.demoMode) state = normalizeState(nextState);
+        else await applyServerState(nextState);
+        resetGameEntryForm();
+        renderAll();
+        switchView("dashboard");
+        await updateOfflineStatus();
+        showToast("Potje opgeslagen met de datum en tijd van deze telefoon.");
+      } catch (error) {
+        if (!config.demoMode && isNetworkFailure(error)) {
+          serverReachable = false;
+          await queueOfflineGame(payload, actor, clientGameId);
+          return;
+        }
+        throw error;
+      }
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      submit.disabled = false;
+    }
   }
 
   async function handleAddPlayer(event) {
     event.preventDefault();
+    try { requireOnlineAction(); }
+    catch (error) { return showToast(error.message, true); }
     const names = [...new Set(elements.newPlayerNames.value
       .split(/[\n,;]+/)
       .map((name) => name.trim())
@@ -883,13 +1385,15 @@
       return showToast("Voer geldige namen in, één per regel.", true);
     }
     try {
-      state = await backend.addPlayers(names, await askAdminPin(), await requireActor());
+      await applyServerState(await backend.addPlayers(names, await askAdminPin(), await requireActor()));
       elements.newPlayerNames.value = ""; renderAll();
       showToast(`${names.length} ${names.length === 1 ? "speler is" : "spelers zijn"} toegevoegd.`);
     } catch (error) { showToast(error.message, true); }
   }
 
   async function handleAdminClick(event) {
+    try { requireOnlineAction(); }
+    catch (error) { return showToast(error.message, true); }
     const deleteButton = event.target.closest("[data-delete-player]");
     if (deleteButton) {
       const id = deleteButton.dataset.deletePlayer;
@@ -903,7 +1407,7 @@
         : `${player.name} wordt permanent verwijderd. Dit kan niet ongedaan worden gemaakt.`;
       if (!await confirmAction("Speler definitief verwijderen?", warning)) return;
       try {
-        state = await backend.deletePlayer(id, await askAdminPin(), await requireActor());
+        await applyServerState(await backend.deletePlayer(id, await askAdminPin(), await requireActor()));
         selectedPlayers.delete(id);
         if (currentActorKey === id) {
           currentActorKey = ADMIN_ACTOR_KEY;
@@ -917,17 +1421,19 @@
     const button = event.target.closest("[data-player-active]"); if (!button) return;
     const id = button.dataset.playerActive; const active = button.dataset.nextActive === "true";
     try {
-      state = await backend.setPlayerActive(id, active, await askAdminPin(), await requireActor());
+      await applyServerState(await backend.setPlayerActive(id, active, await askAdminPin(), await requireActor()));
       renderAll(); showToast("Speler bijgewerkt.");
     } catch (error) { showToast(error.message, true); }
   }
 
   async function handleRankingSettings(event) {
     event.preventDefault();
+    try { requireOnlineAction(); }
+    catch (error) { return showToast(error.message, true); }
     const criterion = elements.rankingCriterionSelect.value;
     if (!RANKING_CRITERIA[criterion]) return showToast("Kies een geldig rangschikkingscriterium.", true);
     try {
-      state = await backend.setRankingCriterion(criterion, await askAdminPin(), await requireActor());
+      await applyServerState(await backend.setRankingCriterion(criterion, await askAdminPin(), await requireActor()));
       renderAll(); showToast(`Rangschikking ingesteld op: ${RANKING_CRITERIA[criterion].label}.`);
     } catch (error) { showToast(error.message, true); }
   }
@@ -996,6 +1502,8 @@
   }
 
   function openEditGame(id) {
+    try { requireOnlineAction(); }
+    catch (error) { showToast(error.message, true); return; }
     const game = state.games.find((item) => item.id === id);
     if (!game) return showToast("Potje niet gevonden.", true);
     editingGameId = id;
@@ -1010,6 +1518,8 @@
 
   async function handleEditSubmit(event) {
     event.preventDefault();
+    try { requireOnlineAction(); }
+    catch (error) { return showValidation(error.message, elements.editGameValidation); }
     showValidation("", elements.editGameValidation);
     const game = state.games.find((item) => item.id === editingGameId);
     if (!game) return showValidation("Potje niet gevonden.", elements.editGameValidation);
@@ -1030,12 +1540,12 @@
     try {
       const submit = elements.editGameForm.querySelector('button[type="submit"]');
       submit.disabled = true;
-      state = await backend.updateGame(editingGameId, {
+      await applyServerState(await backend.updateGame(editingGameId, {
         entered_by: enteredBy,
         winner,
         entries,
         note: elements.editGameNote.value.trim()
-      }, await askAdminPin(), await requireActor());
+      }, await askAdminPin(), await requireActor()));
       elements.editGameDialog.close();
       editingGameId = "";
       editingPlayers.clear();
@@ -1051,9 +1561,11 @@
     const editButton = event.target.closest("[data-edit-game]");
     if (editButton) return openEditGame(editButton.dataset.editGame);
     const deleteButton = event.target.closest("[data-delete-game]"); if (!deleteButton) return;
+    try { requireOnlineAction(); }
+    catch (error) { return showToast(error.message, true); }
     if (!await confirmAction("Potje verwijderen?", "De stand wordt direct opnieuw berekend. De verwijdering blijft zichtbaar in het logboek.")) return;
     try {
-      state = await backend.deleteGame(deleteButton.dataset.deleteGame, await askAdminPin(), await requireActor());
+      await applyServerState(await backend.deleteGame(deleteButton.dataset.deleteGame, await askAdminPin(), await requireActor()));
       renderAll(); showToast("Potje verwijderd.");
     } catch (error) { showToast(error.message, true); }
   }
@@ -1327,20 +1839,53 @@
     elements.historyFilterForm.addEventListener("submit", applyHistoryFilter);
     elements.historyClearButton.addEventListener("click", clearHistoryFilter);
     window.addEventListener("afterprint", () => document.body.classList.remove("printing-history"));
-    elements.refreshButton.addEventListener("click", () => ensureLoaded());
+    elements.refreshButton.addEventListener("click", async () => {
+      if (!config.demoMode && navigator.onLine) await syncPendingGames({ silent: true });
+      await ensureLoaded();
+    });
+    elements.syncButton?.addEventListener("click", () => syncPendingGames({ silent: false }));
+
+    window.addEventListener("offline", async () => {
+      serverReachable = false;
+      await updateOfflineStatus();
+      showToast("Je bent offline. Nieuwe potjes worden lokaal bewaard.");
+    });
+    window.addEventListener("online", async () => {
+      serverReachable = true;
+      await updateOfflineStatus();
+      await syncPendingGames({ silent: false });
+    });
     elements.currentUserButton.addEventListener("click", async () => {
       try {
         const actor = await requestIdentity(true);
-        await logAccessOnce(actor, true);
-        renderAll(); showToast(`Actief als ${actor.name}.`);
+        if (actor && (config.demoMode || (navigator.onLine && serverReachable))) {
+          await logAccessOnce(actor, true);
+        }
+        renderAll();
+        await updateOfflineStatus();
+        showToast(`Actief als ${actor?.name || "onbekend"}.`);
       } catch (error) { showToast(error.message, true); }
     });
   }
 
   async function init() {
-    try { setupMode(); bindEvents(); await ensureLoaded(); }
-    catch (error) { elements.modeBanner.hidden = false; elements.modeBanner.textContent = error.message; showToast(error.message, true); }
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?v=19", { updateViaCache: "none" }).catch(() => {});
+    try {
+      offlineStore = new OfflineStore();
+      await offlineStore.open();
+      setupMode();
+      bindEvents();
+      await ensureLoaded();
+    } catch (error) {
+      elements.modeBanner.hidden = false;
+      elements.modeBanner.textContent = error.message;
+      showToast(error.message, true);
+    }
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("sw.js?v=21", { updateViaCache: "none" })
+        .catch(() => {});
+    }
   }
 
   init();
