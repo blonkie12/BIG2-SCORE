@@ -887,3 +887,18 @@ dialog.image-viewer-dialog::backdrop {
   font-size: .76rem;
   line-height: 1.45;
 }
+
+
+.remembered-players-note {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, .38);
+  border-radius: 12px;
+  background: rgba(30, 64, 175, .18);
+  font-size: .78rem;
+  line-height: 1.45;
+}
+.remembered-players-note[hidden] {
+  display: none;
+}

@@ -3,6 +3,7 @@
 
   const config = window.BIG2_CONFIG || {};
   const QUALIFYING_GAMES = 10;
+  const REMEMBERED_PLAYERS_TTL_MS = 120 * 60 * 1000;
   const ADMIN_ACTOR_KEY = "__admin__";
   const DEFAULT_RANKING_CRITERION = "average_penalty";
   const RANKING_CRITERIA = {
@@ -57,7 +58,8 @@
     offlineTitle: $("#offline-title"),
     offlineDetail: $("#offline-detail"),
     syncButton: $("#sync-button"),
-    offlineEntryNote: $("#offline-entry-note")
+    offlineEntryNote: $("#offline-entry-note"),
+    rememberedPlayersNote: $("#remembered-players-note")
   };
 
   let state = { group: { name: "Big Two Vakantiestand" }, players: [], games: [], logs: [] };
@@ -79,6 +81,7 @@
   let syncingPendingGames = false;
   let serverReachable = navigator.onLine;
   let lastSyncedAt = null;
+  let rememberedPlayersNotice = null;
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -165,6 +168,142 @@
 
   function actorStorageKey() {
     return `big2-current-actor:${state.group?.slug || config.groupSlug || "demo"}`;
+  }
+
+  function rememberedPlayersStorageKey(playerId) {
+    const groupSlug = state.group?.slug || config.groupSlug || "demo";
+    return `big2-last-participants:${groupSlug}:${playerId}`;
+  }
+
+  function clearRememberedPlayersNotice() {
+    rememberedPlayersNotice = null;
+    if (elements.rememberedPlayersNote) {
+      elements.rememberedPlayersNote.hidden = true;
+      elements.rememberedPlayersNote.textContent = "";
+    }
+  }
+
+  function rememberParticipantsForInputter(playerId, participantIds) {
+    if (!playerId || playerId === ADMIN_ACTOR_KEY) return;
+
+    const activeIds = new Set(
+      state.players
+        .filter((player) => player.active)
+        .map((player) => String(player.id))
+    );
+
+    const normalizedIds = [...new Set(
+      (participantIds || [])
+        .map(String)
+        .filter((id) => activeIds.has(id))
+    )];
+
+    if (normalizedIds.length < 2 || normalizedIds.length > 8) return;
+
+    const savedAt = Date.now();
+    const record = {
+      player_id: String(playerId),
+      participant_ids: normalizedIds,
+      saved_at: savedAt,
+      expires_at: savedAt + REMEMBERED_PLAYERS_TTL_MS
+    };
+
+    try {
+      localStorage.setItem(
+        rememberedPlayersStorageKey(playerId),
+        JSON.stringify(record)
+      );
+    } catch {
+      // De score blijft gewoon opgeslagen wanneer lokale voorkeuren zijn geblokkeerd.
+    }
+  }
+
+  function readRememberedParticipants(playerId) {
+    if (!playerId || playerId === ADMIN_ACTOR_KEY) return null;
+
+    const key = rememberedPlayersStorageKey(playerId);
+    let record;
+
+    try {
+      record = JSON.parse(localStorage.getItem(key) || "null");
+    } catch {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    if (!record || Number(record.expires_at) <= Date.now()) {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    const activeIds = new Set(
+      state.players
+        .filter((player) => player.active)
+        .map((player) => String(player.id))
+    );
+
+    const participantIds = [...new Set(
+      (record.participant_ids || [])
+        .map(String)
+        .filter((id) => activeIds.has(id))
+    )];
+
+    if (participantIds.length < 2 || participantIds.length > 8) {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    return {
+      participantIds,
+      expiresAt: Number(record.expires_at)
+    };
+  }
+
+  function updateRememberedPlayersNote() {
+    if (!elements.rememberedPlayersNote) return;
+
+    if (!rememberedPlayersNotice || rememberedPlayersNotice.expiresAt <= Date.now()) {
+      clearRememberedPlayersNotice();
+      return;
+    }
+
+    const remainingMinutes = Math.max(
+      1,
+      Math.ceil((rememberedPlayersNotice.expiresAt - Date.now()) / 60000)
+    );
+
+    elements.rememberedPlayersNote.textContent =
+      `De spelers uit het laatste potje van ${rememberedPlayersNotice.playerName} ` +
+      `zijn automatisch geselecteerd. Nog ${remainingMinutes} minuten onthouden.`;
+    elements.rememberedPlayersNote.hidden = false;
+  }
+
+  function restoreRememberedParticipantsForCurrentActor({ notify = true } = {}) {
+    if (selectedPlayers.size > 0) return false;
+
+    const actor = currentActor();
+    if (!actor?.id) {
+      clearRememberedPlayersNotice();
+      return false;
+    }
+
+    const remembered = readRememberedParticipants(actor.id);
+    if (!remembered) {
+      clearRememberedPlayersNotice();
+      return false;
+    }
+
+    selectedPlayers = new Set(remembered.participantIds);
+    rememberedPlayersNotice = {
+      playerName: actor.name,
+      expiresAt: remembered.expiresAt
+    };
+
+    if (notify) {
+      showToast(`Spelers van het laatste potje van ${actor.name} zijn voorgeselecteerd.`);
+    }
+
+    return true;
   }
 
   function currentActor() {
@@ -606,6 +745,7 @@
 
   function resetGameEntryForm() {
     selectedPlayers.clear();
+    clearRememberedPlayersNotice();
     elements.gameForm.reset();
     renderEntry();
   }
@@ -624,6 +764,12 @@
       attempts: 0,
       last_error: null
     });
+
+    rememberParticipantsForInputter(
+      payload.entered_by,
+      (payload.entries || []).map((entry) => entry.player_id)
+    );
+
     resetGameEntryForm();
     await updateOfflineStatus();
     switchView("dashboard");
@@ -1179,6 +1325,7 @@
     elements.participantChips.innerHTML = activePlayers.map((player) => `<label class="player-chip">
       <input type="checkbox" value="${player.id}" ${selectedPlayers.has(player.id) ? "checked" : ""}>
       <span>${escapeHtml(player.name)}</span></label>`).join("") || '<p class="empty-state">Voeg bij Beheer eerst spelers toe.</p>';
+    updateRememberedPlayersNote();
     updateEntryControls();
   }
 
@@ -1353,6 +1500,12 @@
         const nextState = await backend.addGame(payload, actor, clientGameId);
         if (config.demoMode) state = normalizeState(nextState);
         else await applyServerState(nextState);
+
+        rememberParticipantsForInputter(
+          payload.entered_by,
+          payload.entries.map((entry) => entry.player_id)
+        );
+
         resetGameEntryForm();
         renderAll();
         switchView("dashboard");
@@ -1593,6 +1746,11 @@
   }
 
   function switchView(name) {
+    if (name === "entry") {
+      restoreRememberedParticipantsForCurrentActor({ notify: true });
+      renderEntry();
+    }
+
     $$(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${name}`));
     $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1790,6 +1948,7 @@
         return showToast("Je kunt maximaal 8 spelers voor één potje selecteren.", true);
       }
       checkbox.checked ? selectedPlayers.add(checkbox.value) : selectedPlayers.delete(checkbox.value);
+      clearRememberedPlayersNotice();
       updateEntryControls();
     });
     elements.winnerSelect.addEventListener("change", () => {
@@ -1857,10 +2016,22 @@
     });
     elements.currentUserButton.addEventListener("click", async () => {
       try {
+        const previousActorKey = currentActorKey;
         const actor = await requestIdentity(true);
+
         if (actor && (config.demoMode || (navigator.onLine && serverReachable))) {
           await logAccessOnce(actor, true);
         }
+
+        if (previousActorKey !== currentActorKey) {
+          selectedPlayers.clear();
+          clearRememberedPlayersNotice();
+
+          if ($("#view-entry")?.classList.contains("active")) {
+            restoreRememberedParticipantsForCurrentActor({ notify: false });
+          }
+        }
+
         renderAll();
         await updateOfflineStatus();
         showToast(`Actief als ${actor?.name || "onbekend"}.`);
@@ -1883,7 +2054,7 @@
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
-        .register("sw.js?v=21", { updateViaCache: "none" })
+        .register("sw.js?v=22", { updateViaCache: "none" })
         .catch(() => {});
     }
   }

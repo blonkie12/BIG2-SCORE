@@ -1,10 +1,10 @@
-const CACHE = "big2-v21-offline-chronology";
+const CACHE = "big2-v22-remembered-players";
 const APP_SHELL = [
   "./",
   "index.html",
-  "styles.css?v=21",
-  "app.js?v=21",
-  "config.js?v=21",
+  "styles.css?v=22",
+  "app.js?v=22",
+  "config.js?v=22",
   "manifest.webmanifest",
   "icon.svg",
   "big-two-handrangschikking.webp"
@@ -84,7 +84,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.endsWith("/config.js") || url.pathname.endsWith("config.js")) {
-    event.respondWith(networkFirst(event.request, "config.js?v=21"));
+    event.respondWith(networkFirst(event.request, "config.js?v=22"));
     return;
   }
 
