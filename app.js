@@ -20,7 +20,7 @@
     groupTitle: $("#group-title"), modeBanner: $("#mode-banner"), toast: $("#toast"),
     currentUserButton: $("#current-user-button"), refreshButton: $("#refresh-button"),
     periodSelect: $("#period-select"), headerContextLabel: $("#header-context-label"),
-    contextKind: $("#context-kind"), contextTitle: $("#context-title"), contextStatus: $("#context-status"),
+    archiveActionsBar: $("#archive-actions-bar"),
     printStandingsButton: $("#print-standings-button"), printCertificatesButton: $("#print-certificates-button"),
     entryPeriodLabel: $("#entry-period-label"),
     totalGames: $("#total-games"), totalPlayers: $("#total-players"), leaderName: $("#leader-name"), leaderDetail: $("#leader-detail"),
@@ -262,14 +262,8 @@
     const scope = currentScope();
     const period = currentPeriod();
     elements.headerContextLabel.textContent = scope?.type === "year" ? `Jaarstand ${scope.year}` : period?.is_archived ? "Archief" : "Actieve periode";
-    elements.contextKind.textContent = scope?.type === "year" ? "Algemene ranglijst" : period?.is_archived ? "Gearchiveerde periode" : "Actieve periode";
-    elements.contextTitle.textContent = scopeTitle();
-    elements.contextStatus.textContent = scope?.type === "year"
-      ? "Alle jaarpotjes tellen mee · officieel alleen bij minimaal 10 potjes in iedere afgesloten periode"
-      : period?.is_archived
-        ? `Alleen-lezen${period.archived_at ? ` · gearchiveerd ${formatDate(period.archived_at)}` : ""}`
-        : "Scores kunnen aan deze periode worden toegevoegd";
     const finalPrintAvailable = Boolean(period?.is_archived);
+    elements.archiveActionsBar.hidden = !finalPrintAvailable;
     elements.printStandingsButton.hidden = !finalPrintAvailable;
     elements.printCertificatesButton.hidden = !finalPrintAvailable;
     elements.entryPeriodLabel.textContent = period?.is_archived ? "Archief · alleen lezen" : period ? period.name : "Kies actieve periode";
@@ -2522,7 +2516,7 @@
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
-        .register("sw.js?v=24", { updateViaCache: "none" })
+        .register("sw.js?v=25", { updateViaCache: "none" })
         .catch(() => {});
     }
   }
