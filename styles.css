@@ -902,3 +902,161 @@ dialog.image-viewer-dialog::backdrop {
 .remembered-players-note[hidden] {
   display: none;
 }
+
+
+/* Jaarstanden en periodes */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.period-picker { width: min(270px, 36vw); margin: 0; }
+.period-picker select { min-height: 46px; padding: 9px 34px 9px 11px; font-size: .82rem; font-weight: 750; }
+.context-strip {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(15,29,48,.72);
+}
+.context-copy { min-width: 0; display: grid; gap: 2px; }
+.context-kind { color: var(--accent-2); font-size: .7rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.context-copy strong { font-size: 1.12rem; overflow-wrap: anywhere; }
+.context-copy small { color: var(--muted); }
+.context-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.period-status-badge {
+  max-width: 260px;
+  padding: 6px 9px;
+  color: #bbf7d0;
+  border: 1px solid rgba(52,211,153,.25);
+  border-radius: 999px;
+  background: rgba(52,211,153,.08);
+  font-size: .72rem;
+  font-weight: 800;
+  text-align: center;
+}
+.period-status-badge.archived { color: #cbd5e1; border-color: var(--line); background: rgba(148,163,184,.08); }
+.period-create-form { display: grid; grid-template-columns: minmax(0,1fr) 120px auto; gap: 10px; align-items: end; margin-bottom: 12px; }
+.period-year-field { width: 120px; }
+.period-admin-list { display: grid; gap: 9px; }
+.period-admin-card {
+  padding: 12px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255,255,255,.025);
+}
+.period-admin-card > div:first-child { min-width: 0; display: grid; gap: 3px; }
+.period-admin-card > div:first-child span { color: var(--muted); font-size: .76rem; }
+.period-admin-card.archived { opacity: .82; }
+.period-admin-actions { display: flex; flex: none; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.danger-outline-button {
+  min-height: 42px;
+  padding: 8px 11px;
+  color: #fecdd3;
+  border: 1px solid rgba(251,113,133,.35);
+  border-radius: 11px;
+  background: rgba(190,24,93,.08);
+  font-weight: 800;
+}
+.nav-button:disabled { opacity: .38; }
+
+.print-document { display: none; }
+
+@media (max-width: 760px) {
+  .app-header { align-items: flex-start; gap: 10px; }
+  .header-actions { width: min(64%, 430px); flex-wrap: wrap; }
+  .user-button { flex: 1 1 150px; }
+  .period-picker { flex: 1 1 190px; width: auto; }
+  .period-picker select { font-size: .76rem; }
+  .context-strip { align-items: stretch; flex-direction: column; }
+  .context-actions { justify-content: stretch; }
+  .context-actions .secondary-button { flex: 1 1 150px; }
+  .period-create-form { grid-template-columns: 1fr 105px; }
+  .period-create-form .primary-button { grid-column: 1 / -1; width: 100%; }
+  .period-year-field { width: auto; }
+}
+
+@media (max-width: 460px) {
+  .app-header { display: grid; grid-template-columns: 1fr; padding-top: 18px; }
+  .header-actions { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) 46px; }
+  .user-button { grid-column: 1 / -1; width: 100%; }
+  .period-picker { width: 100%; }
+  .period-admin-card { align-items: stretch; flex-direction: column; }
+  .period-admin-actions { justify-content: stretch; }
+  .period-admin-actions button { flex: 1; }
+}
+
+/* Afdrukbare eindstand en oorkondes */
+@media print {
+  body.printing-standings,
+  body.printing-certificates {
+    color: #111827;
+    background: #fff;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-standings > *:not(#standings-print-sheet),
+  body.printing-certificates > *:not(#certificates-print-sheet) { display: none !important; }
+  body.printing-standings #standings-print-sheet,
+  body.printing-certificates #certificates-print-sheet { display: block !important; }
+
+  body.printing-standings #standings-print-sheet { padding: 5mm; }
+  .print-score-header { padding-bottom: 8mm; border-bottom: 2px solid #111827; }
+  .print-score-header p { margin: 0 0 3mm; font-size: 9pt; letter-spacing: .16em; font-weight: 700; }
+  .print-score-header h1 { margin: 0 0 2mm; font-size: 24pt; }
+  .print-score-header span { color: #475569; font-size: 9pt; }
+  .print-score-table { width: 100%; min-width: 0; margin-top: 7mm; border-collapse: collapse; font-size: 9pt; }
+  .print-score-table th, .print-score-table td { padding: 3mm 2mm; color: #111827; border-bottom: 1px solid #cbd5e1; text-align: right; }
+  .print-score-table th:nth-child(2), .print-score-table td:nth-child(2) { text-align: left; }
+  .print-score-table th:first-child, .print-score-table td:first-child { text-align: center; }
+  .print-score-table .print-unqualified { color: #64748b; opacity: .65; }
+  .print-score-footer { margin-top: 8mm; color: #64748b; font-size: 8pt; }
+
+  body.printing-certificates { counter-reset: certificate; }
+  .certificate-page { min-height: 270mm; display: flex; align-items: center; justify-content: center; break-after: page; page-break-after: always; }
+  .certificate-page:last-child { break-after: auto; page-break-after: auto; }
+  .certificate-frame {
+    width: 100%;
+    min-height: 245mm;
+    padding: 18mm 16mm;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 4px double #a16207;
+    outline: 1px solid #d4a72c;
+    outline-offset: -8px;
+    background: #fffdf5;
+  }
+  .certificate-topline { color: #854d0e; font-size: 9pt; font-weight: 800; letter-spacing: .2em; }
+  .certificate-medal { margin-top: 8mm; font-size: 34pt; }
+  .certificate-frame h1 { margin: 4mm 0 1mm; color: #713f12; font-family: Georgia, serif; font-size: 34pt; }
+  .certificate-for { margin: 2mm 0; color: #57534e; font-size: 12pt; }
+  .certificate-place { margin: 3mm 0 6mm; color: #a16207; font-family: Georgia, serif; font-size: 25pt; font-weight: 700; }
+  .certificate-frame h2 { margin: 0; color: #111827; font-family: Georgia, serif; font-size: 30pt; }
+  .certificate-period { margin: 4mm 0 9mm; color: #57534e; font-size: 13pt; }
+  .certificate-stats { width: 85%; display: grid; grid-template-columns: repeat(4,1fr); gap: 4mm; margin: 4mm 0 8mm; }
+  .certificate-stats div { padding: 4mm 2mm; border-top: 1px solid #d6d3d1; border-bottom: 1px solid #d6d3d1; }
+  .certificate-stats span { display: block; color: #78716c; font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; }
+  .certificate-stats strong { display: block; margin-top: 1mm; color: #111827; font-size: 16pt; }
+  .certificate-rule { color: #78716c; font-size: 9pt; }
+  .certificate-footer { width: 85%; margin-top: auto; padding-top: 5mm; display: flex; justify-content: space-between; color: #78716c; border-top: 1px solid #d6d3d1; font-size: 8pt; }
+}

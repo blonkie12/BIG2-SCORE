@@ -19,6 +19,10 @@
   const elements = {
     groupTitle: $("#group-title"), modeBanner: $("#mode-banner"), toast: $("#toast"),
     currentUserButton: $("#current-user-button"), refreshButton: $("#refresh-button"),
+    periodSelect: $("#period-select"), headerContextLabel: $("#header-context-label"),
+    contextKind: $("#context-kind"), contextTitle: $("#context-title"), contextStatus: $("#context-status"),
+    printStandingsButton: $("#print-standings-button"), printCertificatesButton: $("#print-certificates-button"),
+    entryPeriodLabel: $("#entry-period-label"),
     totalGames: $("#total-games"), totalPlayers: $("#total-players"), leaderName: $("#leader-name"), leaderDetail: $("#leader-detail"),
     rankingBody: $("#ranking-body"), recentGames: $("#recent-games"), historyGames: $("#history-games"), logbookList: $("#logbook-list"),
     participantChips: $("#participant-chips"), winnerSelect: $("#winner-select"), enteredBySelect: $("#entered-by-select"),
@@ -32,6 +36,11 @@
     rankingRuleLabel: $("#ranking-rule-label"), historyRankingRuleLabel: $("#history-ranking-rule-label"),
     activeRankingRule: $("#active-ranking-rule"), rankingSettingsForm: $("#ranking-settings-form"),
     rankingCriterionSelect: $("#ranking-criterion-select"),
+    periodCreateForm: $("#period-create-form"), periodNameInput: $("#period-name-input"),
+    periodYearInput: $("#period-year-input"), periodAdminList: $("#period-admin-list"),
+    standingsPrintSheet: $("#standings-print-sheet"), printStandingsTitle: $("#print-standings-title"),
+    printStandingsMeta: $("#print-standings-meta"), printStandingsBody: $("#print-standings-body"),
+    printStandingsFooter: $("#print-standings-footer"), certificatesPrintSheet: $("#certificates-print-sheet"),
     identityDialog: $("#identity-dialog"), identityForm: $("#identity-form"), identitySelect: $("#identity-select"),
     confirmDialog: $("#confirm-dialog"), confirmTitle: $("#confirm-title"), confirmText: $("#confirm-text"),
     editGameDialog: $("#edit-game-dialog"), editGameForm: $("#edit-game-form"),
@@ -62,7 +71,7 @@
     rememberedPlayersNote: $("#remembered-players-note")
   };
 
-  let state = { group: { name: "Big Two Vakantiestand" }, players: [], games: [], logs: [] };
+  let state = { group: { name: "Big Two Score" }, players: [], periods: [], games: [], logs: [] };
   let selectedPlayers = new Set();
   let currentActorKey = "";
   let editingGameId = "";
@@ -82,6 +91,7 @@
   let serverReachable = navigator.onLine;
   let lastSyncedAt = null;
   let rememberedPlayersNotice = null;
+  let selectedScopeKey = "";
 
   const escapeHtml = (value) => String(value ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -135,6 +145,7 @@
     return {
       group,
       players: Array.isArray(next?.players) ? next.players : [],
+      periods: Array.isArray(next?.periods) ? next.periods : [],
       games,
       logs: Array.isArray(next?.logs) ? next.logs : []
     };
@@ -157,8 +168,121 @@
     };
   }
 
+  function scopeStorageKey() {
+    return `big2-selected-scope:${state.group?.slug || config.groupSlug || "demo"}`;
+  }
+
+  function periodById(id) {
+    return state.periods.find((period) => sameId(period.id, id));
+  }
+
+  function availableYears() {
+    const years = new Set(state.periods.map((period) => Number(period.year)).filter(Number.isInteger));
+    for (const game of state.games) {
+      if (game.period_id) continue;
+      const date = new Date(game.played_at || game.created_at);
+      if (Number.isFinite(date.getTime())) years.add(date.getFullYear());
+    }
+    if (!years.size) years.add(new Date().getFullYear());
+    return [...years].sort((a, b) => b - a);
+  }
+
+  function scopeExists(key) {
+    if (!key) return false;
+    if (key.startsWith("year:")) return availableYears().includes(Number(key.slice(5)));
+    if (key.startsWith("period:")) return Boolean(periodById(key.slice(7)));
+    return false;
+  }
+
+  function ensureSelectedScope() {
+    if (scopeExists(selectedScopeKey)) return;
+    let saved = "";
+    try { saved = localStorage.getItem(scopeStorageKey()) || ""; } catch {}
+    if (scopeExists(saved)) selectedScopeKey = saved;
+    else selectedScopeKey = `year:${availableYears()[0]}`;
+  }
+
+  function saveSelectedScope() {
+    try { localStorage.setItem(scopeStorageKey(), selectedScopeKey); } catch {}
+  }
+
+  function currentScope() {
+    ensureSelectedScope();
+    if (selectedScopeKey.startsWith("period:")) {
+      const period = periodById(selectedScopeKey.slice(7));
+      return period ? { type: "period", period, year: Number(period.year) } : null;
+    }
+    return { type: "year", year: Number(selectedScopeKey.slice(5)) };
+  }
+
+  function currentPeriod() {
+    const scope = currentScope();
+    return scope?.type === "period" ? scope.period : null;
+  }
+
+  function scopeTitle() {
+    const scope = currentScope();
+    if (!scope) return "Big Two";
+    return scope.type === "year" ? `Jaarstand ${scope.year}` : scope.period.name;
+  }
+
+  function scopeGames() {
+    const scope = currentScope();
+    if (!scope) return [];
+    if (scope.type === "period") {
+      return state.games.filter((game) => sameId(game.period_id, scope.period.id));
+    }
+    const periodIds = new Set(state.periods.filter((period) => Number(period.year) === scope.year).map((period) => String(period.id)));
+    return state.games.filter((game) => {
+      if (game.period_id) return periodIds.has(String(game.period_id));
+      const date = new Date(game.played_at || game.created_at);
+      return Number.isFinite(date.getTime()) && date.getFullYear() === scope.year;
+    });
+  }
+
+  function scopeIsWritable() {
+    const period = currentPeriod();
+    return Boolean(period && !period.is_archived);
+  }
+
+  function renderPeriodSelector() {
+    ensureSelectedScope();
+    const years = availableYears();
+    const active = state.periods.filter((period) => !period.is_archived)
+      .sort((a, b) => Number(b.year) - Number(a.year) || String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    const archived = state.periods.filter((period) => period.is_archived)
+      .sort((a, b) => Number(b.year) - Number(a.year) || String(b.archived_at || b.created_at || "").localeCompare(String(a.archived_at || a.created_at || "")));
+
+    const yearOptions = years.map((year) => `<option value="year:${year}">📊 Jaarstand ${year}</option>`).join("");
+    const activeOptions = active.map((period) => `<option value="period:${period.id}">▶ ${escapeHtml(period.name)}</option>`).join("");
+    const archiveOptions = archived.map((period) => `<option value="period:${period.id}">▣ ${escapeHtml(period.name)} · archief</option>`).join("");
+    elements.periodSelect.innerHTML = `${yearOptions}${activeOptions ? `<optgroup label="Actieve periodes">${activeOptions}</optgroup>` : ""}${archiveOptions ? `<optgroup label="Archief">${archiveOptions}</optgroup>` : ""}`;
+    elements.periodSelect.value = selectedScopeKey;
+
+    const scope = currentScope();
+    const period = currentPeriod();
+    elements.headerContextLabel.textContent = scope?.type === "year" ? `Jaarstand ${scope.year}` : period?.is_archived ? "Archief" : "Actieve periode";
+    elements.contextKind.textContent = scope?.type === "year" ? "Algemene ranglijst" : period?.is_archived ? "Gearchiveerde periode" : "Actieve periode";
+    elements.contextTitle.textContent = scopeTitle();
+    elements.contextStatus.textContent = scope?.type === "year"
+      ? "Alle potjes uit alle periodes van dit jaar"
+      : period?.is_archived
+        ? `Alleen-lezen${period.archived_at ? ` · gearchiveerd ${formatDate(period.archived_at)}` : ""}`
+        : "Scores kunnen aan deze periode worden toegevoegd";
+    elements.printCertificatesButton.hidden = !(period?.is_archived);
+    elements.entryPeriodLabel.textContent = period?.is_archived ? "Archief · alleen lezen" : period ? period.name : "Kies actieve periode";
+    elements.entryPeriodLabel.classList.toggle("archived", Boolean(period?.is_archived));
+
+    const entryTab = $("#tab-entry");
+    entryTab.disabled = !scopeIsWritable();
+    entryTab.title = scopeIsWritable() ? `Potje invoeren in ${period.name}` : "Kies rechtsboven eerst een actieve periode";
+  }
+
   function rankingCriterion() {
-    const value = state.group?.ranking_criterion;
+    const archivedPeriod = currentPeriod();
+    const value = archivedPeriod?.is_archived && RANKING_CRITERIA[archivedPeriod.ranking_criterion]
+      ? archivedPeriod.ranking_criterion
+      : state.group?.ranking_criterion;
     return RANKING_CRITERIA[value] ? value : DEFAULT_RANKING_CRITERION;
   }
 
@@ -429,8 +553,9 @@
         return migrated;
       }
       const initial = normalizeState({
-        group: { name: "Big Two Vakantiestand – demo", slug: "demo", ranking_criterion: DEFAULT_RANKING_CRITERION },
+        group: { name: "Big Two Score – demo", slug: "demo", ranking_criterion: DEFAULT_RANKING_CRITERION },
         players: [],
+        periods: [{ id: "demo-period", name: "Demo periode", year: new Date().getFullYear(), is_archived: false, ranking_criterion: DEFAULT_RANKING_CRITERION, created_at: new Date().toISOString(), archived_at: null }],
         games: [], logs: []
       });
       this.save(initial);
@@ -448,6 +573,8 @@
     }
     async addGame(payload, actor) {
       const current = await this.bootstrap();
+      const period = current.periods.find((item) => sameId(item.id, payload.period_id));
+      if (!period || period.is_archived) throw new Error("Kies een actieve periode.");
       const game = { id: uuid(), played_at: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: null, ...payload };
       current.games.unshift(game);
       this.addLog(current, "game_added", actor, "game", game.id, { game });
@@ -501,6 +628,27 @@
       const previous = current.group.ranking_criterion || DEFAULT_RANKING_CRITERION;
       current.group.ranking_criterion = criterion;
       this.addLog(current, "ranking_changed", actor, "group", current.group.id || null, { previous, criterion });
+      this.save(current); return current;
+    }
+    async createPeriod(name, year, adminPin, actor) {
+      const current = await this.bootstrap();
+      if (current.periods.some((period) => Number(period.year) === Number(year) && period.name.toLowerCase() === name.trim().toLowerCase())) {
+        throw new Error("Deze periode bestaat al.");
+      }
+      const period = { id: uuid(), name: name.trim(), year: Number(year), is_archived: false, ranking_criterion: current.group.ranking_criterion || DEFAULT_RANKING_CRITERION, created_at: new Date().toISOString(), archived_at: null };
+      current.periods.push(period);
+      this.addLog(current, "period_created", actor, "period", period.id, { name: period.name, year: period.year });
+      this.save(current); return current;
+    }
+    async archivePeriod(id, adminPin, actor) {
+      const current = await this.bootstrap();
+      const period = current.periods.find((item) => sameId(item.id, id));
+      if (!period) throw new Error("Periode niet gevonden.");
+      if (period.is_archived) throw new Error("Deze periode is al gearchiveerd.");
+      period.is_archived = true;
+      period.ranking_criterion = current.group.ranking_criterion || DEFAULT_RANKING_CRITERION;
+      period.archived_at = new Date().toISOString();
+      this.addLog(current, "period_archived", actor, "period", period.id, { name: period.name, year: period.year });
       this.save(current); return current;
     }
     async deleteGame(id, adminPin, actor) {
@@ -574,8 +722,9 @@
 
     addGame(payload, actor, clientGameId = uuid()) {
       const fallbackTime = captureDeviceTime();
-      return this.rpc("big2_add_game_v3", {
+      return this.rpc("big2_add_game_v4", {
         p_slug: config.groupSlug,
+        p_period_id: payload.period_id,
         p_client_game_id: clientGameId,
         p_played_at: payload.played_at || fallbackTime.played_at,
         p_client_timezone: payload.client_timezone || fallbackTime.client_timezone,
@@ -630,6 +779,22 @@
         p_slug: config.groupSlug, p_admin_pin: adminPin,
         p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
         p_criterion: criterion
+      });
+    }
+
+    createPeriod(name, year, adminPin, actor) {
+      return this.rpc("big2_admin_create_period", {
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_name: name, p_year: Number(year)
+      });
+    }
+
+    archivePeriod(id, adminPin, actor) {
+      return this.rpc("big2_admin_archive_period", {
+        p_slug: config.groupSlug, p_admin_pin: adminPin,
+        p_actor_id: actor?.id || null, p_actor_name: actor?.name || "Onbekend",
+        p_period_id: id
       });
     }
 
@@ -1167,7 +1332,7 @@
   function openPlayerHistory(playerId) {
     const player = playerById(playerId);
     if (!player) return showToast("Speler niet gevonden.", true);
-    const playerGames = state.games
+    const playerGames = scopeGames()
       .filter((game) => (game.entries || []).some((entry) => entry.player_id === playerId))
       .sort((a, b) => new Date(b.played_at || b.created_at) - new Date(a.played_at || a.created_at));
     const stats = getStats(playerGames).find((row) => row.id === playerId) || {
@@ -1181,7 +1346,7 @@
       : stats.games
         ? `Nog ${stats.gamesNeeded} potje${stats.gamesNeeded === 1 ? "" : "s"} tot officiële klassering`
         : "Nog geen potjes gespeeld";
-    elements.playerHistoryStatus.textContent = `${player.active ? "Actieve speler" : "Inactieve speler"} · ${qualification}`;
+    elements.playerHistoryStatus.textContent = `${scopeTitle()} · ${player.active ? "Actieve speler" : "Inactieve speler"} · ${qualification}`;
     elements.playerHistorySummary.innerHTML = `
       <div class="player-history-stat"><span>Potjes</span><strong>${stats.games}</strong></div>
       <div class="player-history-stat"><span>Gewonnen</span><strong>${stats.wins}</strong></div>
@@ -1225,10 +1390,13 @@
   }
 
   function renderDashboard() {
-    const stats = getStats();
+    const games = scopeGames();
+    const allStats = getStats(games);
+    const archivedPeriod = currentPeriod()?.is_archived;
+    const stats = archivedPeriod ? allStats.filter((row) => row.games > 0) : allStats;
     const qualified = stats.filter((row) => row.qualified);
-    elements.totalGames.textContent = state.games.length;
-    elements.totalPlayers.textContent = state.players.filter((p) => p.active).length;
+    elements.totalGames.textContent = games.length;
+    elements.totalPlayers.textContent = allStats.filter((row) => row.games > 0).length;
     const leader = qualified[0];
     elements.leaderName.textContent = leader?.name || "–";
     elements.leaderName.disabled = !leader;
@@ -1241,7 +1409,7 @@
 
     elements.rankingBody.innerHTML = rankingRowsHtml(stats);
 
-    renderGameList(elements.recentGames, state.games.slice(0, 2), false);
+    renderGameList(elements.recentGames, games.slice(0, 2), false);
   }
 
   function gameCard(game, allowActions) {
@@ -1252,8 +1420,10 @@
       return `<span class="score-pill ${isWinner ? "winner" : ""}"><button class="score-player-button" type="button" data-player-history="${entry.player_id}" aria-label="Bekijk spelgeschiedenis van ${escapeHtml(playerName(entry.player_id))}">${escapeHtml(playerName(entry.player_id))}</button>: ${entry.cards} kaart${entry.cards === 1 ? "" : "en"}${isWinner ? " · winnaar" : ` · ${entry.penalty ?? scorePenalty(entry.cards)} straf`}</span>`;
     }).join("");
     const edited = game.updated_at ? ` · aangepast ${formatDate(game.updated_at)}` : "";
+    const gamePeriod = periodById(game.period_id);
+    const periodMeta = currentScope()?.type === "year" && gamePeriod ? ` · ${escapeHtml(gamePeriod.name)}` : "";
     return `<article class="game-card">
-      <div class="game-card-head"><div><h3>🏆 ${escapeHtml(winner)}</h3><span class="game-meta">${formatDate(game.played_at || game.created_at)} · ingevoerd door ${escapeHtml(playerName(game.entered_by))}${edited}</span></div>
+      <div class="game-card-head"><div><h3>🏆 ${escapeHtml(winner)}</h3><span class="game-meta">${formatDate(game.played_at || game.created_at)}${periodMeta} · ingevoerd door ${escapeHtml(playerName(game.entered_by))}${edited}</span></div>
       ${allowActions ? `<div class="game-actions"><button class="edit-game" type="button" data-edit-game="${game.id}">Aanpassen</button><button class="delete-game" type="button" data-delete-game="${game.id}">Verwijderen</button></div>` : ""}</div>
       <div class="game-scores">${pills}</div>${game.note ? `<p class="game-note">${escapeHtml(game.note)}</p>` : ""}
     </article>`;
@@ -1265,7 +1435,7 @@
   }
 
   function filteredHistoryGames() {
-    return state.games.filter((game) => {
+    return scopeGames().filter((game) => {
       const played = dateKey(game.played_at || game.created_at);
       return (!historyStart || played >= historyStart) && (!historyEnd || played <= historyEnd);
     });
@@ -1281,14 +1451,14 @@
   function renderHistory() {
     const games = filteredHistoryGames();
     const stats = getStats(games).filter((row) => row.games > 0);
-    elements.historyPeriodLabel.textContent = historyPeriodText();
+    elements.historyPeriodLabel.textContent = `${scopeTitle()} · ${historyPeriodText()}`;
     elements.historyGameCount.textContent = games.length;
     elements.historyPlayerCount.textContent = stats.length;
     elements.historyRankingBody.innerHTML = rankingRowsHtml(stats, "Geen spelers in deze periode.");
     elements.historyRankingRuleLabel.textContent = `Vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
-    elements.historyPrintTitle.textContent = `${state.group?.name || "Big Two"} – periodestand`;
+    elements.historyPrintTitle.textContent = `${scopeTitle()} – stand en historie`;
     elements.historyPrintMeta.textContent = `${historyPeriodText()} · ${games.length} potje${games.length === 1 ? "" : "s"} · rapport gemaakt op ${formatLogDate(new Date().toISOString())}`;
-    renderGameList(elements.historyGames, games, true);
+    renderGameList(elements.historyGames, games, scopeIsWritable());
   }
 
   function applyHistoryFilter(event) {
@@ -1372,6 +1542,24 @@
   function renderAdmin() {
     elements.rankingCriterionSelect.value = rankingCriterion();
     elements.activeRankingRule.textContent = rankingLabel();
+    if (!elements.periodYearInput.value) elements.periodYearInput.value = String(availableYears()[0] || new Date().getFullYear());
+
+    elements.periodAdminList.innerHTML = [...state.periods]
+      .sort((a, b) => Number(b.year) - Number(a.year) || Number(a.is_archived) - Number(b.is_archived) || String(b.created_at || "").localeCompare(String(a.created_at || "")))
+      .map((period) => {
+        const gamesCount = state.games.filter((game) => sameId(game.period_id, period.id)).length;
+        return `<article class="period-admin-card ${period.is_archived ? "archived" : "active"}">
+          <div>
+            <strong>${escapeHtml(period.name)}</strong>
+            <span>${period.year} · ${gamesCount} potje${gamesCount === 1 ? "" : "s"} · ${period.is_archived ? "archief" : "actief"}</span>
+          </div>
+          <div class="period-admin-actions">
+            <button class="secondary-button compact" type="button" data-select-period="${period.id}">Bekijken</button>
+            ${period.is_archived ? "" : `<button class="danger-outline-button" type="button" data-archive-period="${period.id}">Archiveren</button>`}
+          </div>
+        </article>`;
+      }).join("") || '<p class="empty-state">Nog geen periodes.</p>';
+
     elements.adminPlayerList.innerHTML = state.players.map((player) => {
       const gamesCount = state.games.filter((game) => (game.entries || []).some((entry) => entry.player_id === player.id)).length;
       return `<div class="admin-row ${player.active ? "" : "inactive"}">
@@ -1396,6 +1584,8 @@
       case "player_status_changed": return `${details.active ? "Speler geactiveerd" : "Speler gedeactiveerd"} · ${details.name || "onbekend"}`;
       case "player_deleted": return `Speler definitief verwijderd · ${details.name || "onbekend"} · ${details.games_deleted || 0} potje(s) verwijderd`;
       case "ranking_changed": return `Rangschikking gewijzigd · ${RANKING_CRITERIA[details.criterion]?.label || details.criterion || "onbekend"}`;
+      case "period_created": return `Periode aangemaakt · ${details.name || "onbekend"}${details.year ? ` · ${details.year}` : ""}`;
+      case "period_archived": return `Periode gearchiveerd · ${details.name || "onbekend"}${details.year ? ` · ${details.year}` : ""}`;
       default: return log.action || "Onbekende actie";
     }
   }
@@ -1409,9 +1599,139 @@
   }
 
   function renderAll() {
-    elements.groupTitle.textContent = state.group?.name || "Big Two Vakantiestand";
+    ensureSelectedScope();
+    elements.groupTitle.textContent = "Big Two Score";
     updateCurrentUserButton();
+    renderPeriodSelector();
     renderDashboard(); renderEntry(); renderHistory(); renderLogbook(); renderAdmin();
+  }
+
+  function printPosition(row, index) {
+    if (!row.qualified) return "–";
+    const qualifiedBefore = getStats(scopeGames()).slice(0, index).filter((item) => item.qualified).length;
+    return String(qualifiedBefore + 1);
+  }
+
+  function printableRankingRows(stats) {
+    let official = 0;
+    return stats.filter((row) => row.games > 0).map((row) => {
+      const position = row.qualified ? String(++official) : "–";
+      return `<tr class="${row.qualified ? "" : "print-unqualified"}">
+        <td>${position}</td><td>${escapeHtml(row.name)}</td><td>${row.averagePenalty.toFixed(2)}</td>
+        <td>${row.games}</td><td>${row.wins}</td><td>${(row.winRate * 100).toFixed(1)}%</td><td>${row.penalties}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function printSelectedStandings() {
+    const games = scopeGames();
+    if (!games.length) return showToast("Er zijn geen potjes in deze stand om af te drukken.", true);
+    const stats = getStats(games);
+    elements.printStandingsTitle.textContent = scopeTitle();
+    elements.printStandingsMeta.textContent = `${games.length} potje${games.length === 1 ? "" : "s"} · ${RANKING_CRITERIA[rankingCriterion()].label} · vanaf ${QUALIFYING_GAMES} potjes officieel`;
+    elements.printStandingsBody.innerHTML = printableRankingRows(stats);
+    elements.printStandingsFooter.textContent = `Big Two Score · afgedrukt ${formatLogDate(new Date().toISOString())} · spelers met minder dan ${QUALIFYING_GAMES} potjes staan buiten de officiële klassering.`;
+    document.body.classList.add("printing-standings");
+    window.print();
+  }
+
+  function certificatePlaceText(index) {
+    return ["1e plaats", "2e plaats", "3e plaats"][index] || `${index + 1}e plaats`;
+  }
+
+  function certificateMedal(index) {
+    return ["🥇", "🥈", "🥉"][index] || "🏅";
+  }
+
+  function printTopThreeCertificates() {
+    const period = currentPeriod();
+    if (!period?.is_archived) return showToast("Oorkondes zijn beschikbaar voor een gearchiveerde periode.", true);
+    const stats = getStats(scopeGames()).filter((row) => row.qualified).slice(0, 3);
+    if (!stats.length) return showToast(`Er zijn geen officieel geklasseerde spelers met minimaal ${QUALIFYING_GAMES} potjes.`, true);
+
+    elements.certificatesPrintSheet.innerHTML = stats.map((row, index) => `<article class="certificate-page">
+      <div class="certificate-frame">
+        <div class="certificate-topline">BIG TWO · OFFICIEEL EINDRESULTAAT</div>
+        <div class="certificate-medal">${certificateMedal(index)}</div>
+        <h1>Oorkonde</h1>
+        <p class="certificate-for">voor het behalen van de</p>
+        <div class="certificate-place">${certificatePlaceText(index)}</div>
+        <h2>${escapeHtml(row.name)}</h2>
+        <p class="certificate-period">${escapeHtml(period.name)} · ${period.year}</p>
+        <div class="certificate-stats">
+          <div><span>Potjes</span><strong>${row.games}</strong></div>
+          <div><span>Gewonnen</span><strong>${row.wins}</strong></div>
+          <div><span>Gem. straf</span><strong>${row.averagePenalty.toFixed(2)}</strong></div>
+          <div><span>Winst</span><strong>${(row.winRate * 100).toFixed(1)}%</strong></div>
+        </div>
+        <p class="certificate-rule">Eindstand volgens: ${escapeHtml(RANKING_CRITERIA[rankingCriterion()].label)}</p>
+        <div class="certificate-footer"><span>Big Two Score</span><span>${period.archived_at ? `Gearchiveerd ${formatDate(period.archived_at)}` : `Jaar ${period.year}`}</span></div>
+      </div>
+    </article>`).join("");
+    document.body.classList.add("printing-certificates");
+    window.print();
+  }
+
+  async function handleCreatePeriod(event) {
+    event.preventDefault();
+    try { requireOnlineAction(); }
+    catch (error) { return showToast(error.message, true); }
+    const name = elements.periodNameInput.value.trim();
+    const year = Number(elements.periodYearInput.value);
+    if (name.length < 2 || name.length > 60 || !Number.isInteger(year) || year < 2020 || year > 2100) {
+      return showToast("Vul een geldige periodenaam en een geldig jaar in.", true);
+    }
+    try {
+      await applyServerState(await backend.createPeriod(name, year, await askAdminPin(), await requireActor()));
+      const created = [...state.periods].filter((period) => !period.is_archived && Number(period.year) === year && period.name.toLowerCase() === name.toLowerCase())
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+      if (created) {
+        selectedScopeKey = `period:${created.id}`;
+        saveSelectedScope();
+      }
+      elements.periodNameInput.value = "";
+      renderAll();
+      showToast(`Periode ${name} is aangemaakt en geselecteerd.`);
+    } catch (error) { showToast(error.message, true); }
+  }
+
+  async function handlePeriodAdminClick(event) {
+    const selectButton = event.target.closest("[data-select-period]");
+    if (selectButton) {
+      selectedScopeKey = `period:${selectButton.dataset.selectPeriod}`;
+      saveSelectedScope();
+      historyStart = ""; historyEnd = "";
+      renderAll();
+      switchView("dashboard");
+      return;
+    }
+
+    const archiveButton = event.target.closest("[data-archive-period]");
+    if (!archiveButton) return;
+    try { requireOnlineAction(); }
+    catch (error) { return showToast(error.message, true); }
+    const period = periodById(archiveButton.dataset.archivePeriod);
+    if (!period) return showToast("Periode niet gevonden.", true);
+
+    const pending = offlineStore ? await offlineStore.getPendingGames(config.groupSlug) : [];
+    const pendingForPeriod = pending.filter((record) => sameId(record?.payload?.period_id, period.id)).length;
+    if (pendingForPeriod > 0) {
+      return showToast(`Eerst synchroniseren: op dit apparaat wachten nog ${pendingForPeriod} potje${pendingForPeriod === 1 ? "" : "s"} voor ${period.name}.`, true);
+    }
+
+    const ok = await confirmAction(
+      `${period.name} archiveren?`,
+      `Hierna kunnen geen scores meer aan deze periode worden toegevoegd, aangepast of verwijderd. Controleer vóór archiveren dat alle andere telefoons ook zijn gesynchroniseerd. Daarna kun je de eindstand en top-3-oorkondes afdrukken.`
+    );
+    if (!ok) return;
+    try {
+      await applyServerState(await backend.archivePeriod(period.id, await askAdminPin(), await requireActor()));
+      selectedScopeKey = `period:${period.id}`;
+      saveSelectedScope();
+      renderAll();
+      switchView("dashboard");
+      showToast(`${period.name} staat nu in het archief.`);
+    } catch (error) { showToast(error.message, true); }
   }
 
   async function requireActor() {
@@ -1458,6 +1778,11 @@
     event.preventDefault();
     showValidation("");
 
+    const period = currentPeriod();
+    if (!period || period.is_archived) {
+      return showValidation("Kies rechtsboven eerst een actieve periode. In een jaarstand of archief kunnen geen scores worden toegevoegd.");
+    }
+
     const winner = elements.winnerSelect.value;
     const enteredBy = elements.enteredBySelect.value;
     if (selectedPlayers.size < 2 || selectedPlayers.size > 8) {
@@ -1476,6 +1801,7 @@
 
     const deviceTime = captureDeviceTime();
     const payload = {
+      period_id: period.id,
       entered_by: enteredBy,
       winner,
       entries,
@@ -1747,6 +2073,10 @@
 
   function switchView(name) {
     if (name === "entry") {
+      if (!scopeIsWritable()) {
+        showToast("Kies rechtsboven eerst een actieve periode om een score in te voeren.", true);
+        return;
+      }
       restoreRememberedParticipantsForCurrentActor({ notify: true });
       renderEntry();
     }
@@ -1894,6 +2224,21 @@
   function bindEvents() {
     $$(".nav-button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
 
+    elements.periodSelect.addEventListener("change", () => {
+      selectedScopeKey = elements.periodSelect.value;
+      saveSelectedScope();
+      historyStart = ""; historyEnd = "";
+      elements.historyStartDate.value = ""; elements.historyEndDate.value = "";
+      selectedPlayers.clear();
+      clearRememberedPlayersNotice();
+      renderAll();
+      if ($("#view-entry")?.classList.contains("active") && !scopeIsWritable()) switchView("dashboard");
+    });
+    elements.printStandingsButton.addEventListener("click", printSelectedStandings);
+    elements.printCertificatesButton.addEventListener("click", printTopThreeCertificates);
+    elements.periodCreateForm.addEventListener("submit", handleCreatePeriod);
+    elements.periodAdminList.addEventListener("click", handlePeriodAdminClick);
+
     const imageViewerReady = [
       elements.handRankingOpen,
       elements.imageViewerDialog,
@@ -1997,7 +2342,9 @@
     elements.historyPdfButton.addEventListener("click", printHistoryReport);
     elements.historyFilterForm.addEventListener("submit", applyHistoryFilter);
     elements.historyClearButton.addEventListener("click", clearHistoryFilter);
-    window.addEventListener("afterprint", () => document.body.classList.remove("printing-history"));
+    window.addEventListener("afterprint", () => {
+      document.body.classList.remove("printing-history", "printing-standings", "printing-certificates");
+    });
     elements.refreshButton.addEventListener("click", async () => {
       if (!config.demoMode && navigator.onLine) await syncPendingGames({ silent: true });
       await ensureLoaded();
@@ -2054,7 +2401,7 @@
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
-        .register("sw.js?v=22", { updateViaCache: "none" })
+        .register("sw.js?v=23", { updateViaCache: "none" })
         .catch(() => {});
     }
   }

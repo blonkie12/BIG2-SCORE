@@ -4,20 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f172a">
-  <meta name="description" content="Gedeelde Big Two-vakantiestand met potjes, overwinningen, strafpunten en auditlog.">
-  <title>Big Two Vakantiestand</title>
+  <meta name="description" content="Big Two-scoreapp met jaarstanden, periodes, archief, offline invoer en eindstanden.">
+  <title>Big Two Score</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=22">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <header class="app-header">
     <div>
-      <p class="eyebrow">Vakantiecompetitie</p>
-      <h1 id="group-title">Big Two</h1>
+      <p id="header-context-label" class="eyebrow">Jaarstand</p>
+      <h1 id="group-title">Big Two Score</h1>
     </div>
     <div class="header-actions">
       <button id="current-user-button" class="user-button" type="button" title="Gebruiker wisselen">👤 Kies gebruiker</button>
+      <label class="period-picker" title="Kies jaarstand of periode">
+        <span class="visually-hidden">Jaarstand of periode</span>
+        <select id="period-select" aria-label="Kies jaarstand of periode"></select>
+      </label>
       <button id="refresh-button" class="icon-button" type="button" aria-label="Vernieuwen" title="Vernieuwen">↻</button>
     </div>
   </header>
@@ -34,6 +38,17 @@
 
   <main class="app-shell">
     <section id="view-dashboard" class="view active" aria-labelledby="tab-dashboard">
+      <section class="context-strip no-print" aria-live="polite">
+        <div class="context-copy">
+          <span id="context-kind" class="context-kind">Jaarstand</span>
+          <strong id="context-title">2026</strong>
+          <small id="context-status">Alle periodes van dit jaar</small>
+        </div>
+        <div class="context-actions">
+          <button id="print-standings-button" class="secondary-button compact" type="button">Stand afdrukken</button>
+          <button id="print-certificates-button" class="secondary-button compact" type="button" hidden>Oorkondes top 3</button>
+        </div>
+      </section>
       <div class="summary-grid">
         <article class="summary-card">
           <span>Potjes</span>
@@ -144,7 +159,7 @@
             <p>Een paar bestaat uit exact twee kaarten met dezelfde waarde. Er worden geen willekeurige extra kaarten bij gespeeld. Een hoger paar verslaat een lager paar.</p>
 
             <h3>10. Three of a kind</h3>
-            <p>Three of a kind bestaat uit drie kaarten met dezelfde waarde plus twee willekeurige kaarten. Het is dus een combinatie van vijf kaarten. Alleen de waarde van de drie gelijke kaarten bepaalt de sterkte.</p>
+            <p>Three of a kind bestaat uit exact drie kaarten met dezelfde waarde. Er worden geen extra kaarten bij gespeeld. Een hogere three of a kind verslaat een lagere.</p>
 
             <h3>11. Straight</h3>
             <p>Een straight bestaat uit vijf opeenvolgende kaarten. De symbolen mogen verschillen. De 2 mag alleen als hoogste kaart worden gebruikt. J–Q–K–A–2 is toegestaan; A–2–3–4–5 en 2–3–4–5–6 zijn niet toegestaan.</p>
@@ -165,7 +180,7 @@
             <p>Een royal flush bestaat uit J–Q–K–A–2 met hetzelfde symbool. Dit is de hoogste combinatie in het spel en eindigt altijd met een 2.</p>
 
             <h3>17. Volgorde van vijfkaartcombinaties</h3>
-            <p><strong>Van laag naar hoog:</strong> three of a kind, straight, flush, full house, four of a kind, straight flush en royal flush.</p>
+            <p><strong>Van laag naar hoog bij vijf kaarten:</strong> straight, flush, full house, four of a kind, straight flush en royal flush. Three of a kind is een losse combinatie van drie kaarten.</p>
 
             <h3>18. Niet toegestane combinaties</h3>
             <p>Two pair en high card als combinatie van vijf kaarten zijn niet toegestaan.</p>
@@ -210,6 +225,7 @@
             <p class="eyebrow">Nieuwe uitslag</p>
             <h2>Potje invoeren</h2>
           </div>
+          <span id="entry-period-label" class="period-status-badge">Actieve periode</span>
         </div>
 
         <fieldset>
@@ -376,6 +392,29 @@
       <section class="panel setup-panel">
         <div class="panel-heading">
           <div>
+            <p class="eyebrow">Competitiebeheer</p>
+            <h2>Periodes</h2>
+          </div>
+          <span class="muted">Alleen met beheerderscode</span>
+        </div>
+        <form id="period-create-form" class="period-create-form">
+          <label class="grow">
+            <span>Nieuwe periode</span>
+            <input id="period-name-input" type="text" minlength="2" maxlength="60" placeholder="Bijvoorbeeld: Najaar 2026" required>
+          </label>
+          <label class="period-year-field">
+            <span>Jaar</span>
+            <input id="period-year-input" type="number" min="2020" max="2100" inputmode="numeric" required>
+          </label>
+          <button class="primary-button compact" type="submit">Periode aanmaken</button>
+        </form>
+        <p class="field-help">Een gearchiveerde periode is definitief alleen-lezen: er kunnen geen potjes meer worden toegevoegd, aangepast of verwijderd. Laat daarom vóór archiveren alle telefoons synchroniseren.</p>
+        <div id="period-admin-list" class="period-admin-list"></div>
+      </section>
+
+      <section class="panel setup-panel">
+        <div class="panel-heading">
+          <div>
             <p class="eyebrow">Ranglijstbeheer</p>
             <h2>Rangschikking bepalen</h2>
           </div>
@@ -469,6 +508,21 @@
     </form>
   </dialog>
 
+  <section id="standings-print-sheet" class="print-document" aria-hidden="true">
+    <div class="print-score-header">
+      <p>BIG TWO · OFFICIËLE STAND</p>
+      <h1 id="print-standings-title">Eindstand</h1>
+      <span id="print-standings-meta"></span>
+    </div>
+    <table class="print-score-table">
+      <thead><tr><th>#</th><th>Speler</th><th>Gem. straf</th><th>Potjes</th><th>Gewonnen</th><th>Winst%</th><th>Straf totaal</th></tr></thead>
+      <tbody id="print-standings-body"></tbody>
+    </table>
+    <p id="print-standings-footer" class="print-score-footer"></p>
+  </section>
+
+  <section id="certificates-print-sheet" class="print-document certificates-document" aria-hidden="true"></section>
+
   <dialog id="image-viewer-dialog" class="image-viewer-dialog" aria-label="Korte Big Two-spelregels">
     <div class="image-viewer-shell">
       <div class="image-viewer-toolbar">
@@ -551,7 +605,7 @@
       </div>
     </form>
   </dialog>
-  <script src="config.js?v=22"></script>
-  <script src="app.js?v=22"></script>
+  <script src="config.js?v=23"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
