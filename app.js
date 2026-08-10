@@ -265,11 +265,13 @@
     elements.contextKind.textContent = scope?.type === "year" ? "Algemene ranglijst" : period?.is_archived ? "Gearchiveerde periode" : "Actieve periode";
     elements.contextTitle.textContent = scopeTitle();
     elements.contextStatus.textContent = scope?.type === "year"
-      ? "Alle potjes uit alle periodes van dit jaar"
+      ? "Alle jaarpotjes tellen mee · officieel alleen bij minimaal 10 potjes in iedere afgesloten periode"
       : period?.is_archived
         ? `Alleen-lezen${period.archived_at ? ` · gearchiveerd ${formatDate(period.archived_at)}` : ""}`
         : "Scores kunnen aan deze periode worden toegevoegd";
-    elements.printCertificatesButton.hidden = !(period?.is_archived);
+    const finalPrintAvailable = Boolean(period?.is_archived);
+    elements.printStandingsButton.hidden = !finalPrintAvailable;
+    elements.printCertificatesButton.hidden = !finalPrintAvailable;
     elements.entryPeriodLabel.textContent = period?.is_archived ? "Archief · alleen lezen" : period ? period.name : "Kies actieve periode";
     elements.entryPeriodLabel.classList.toggle("archived", Boolean(period?.is_archived));
 
@@ -1163,34 +1165,139 @@
     return result || a.name.localeCompare(b.name, "nl");
   }
 
-  function getStats(games = state.games) {
+  function archivedPeriodsForYear(year) {
+    return state.periods
+      .filter((period) => Number(period.year) === Number(year) && period.is_archived)
+      .sort((a, b) =>
+        String(a.archived_at || a.created_at || "").localeCompare(
+          String(b.archived_at || b.created_at || "")
+        )
+      );
+  }
+
+  function playerGamesInPeriod(playerId, periodId) {
+    let count = 0;
+    for (const game of state.games) {
+      if (!sameId(game.period_id, periodId)) continue;
+      if ((game.entries || []).some((entry) => sameId(entry.player_id, playerId))) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  function qualificationForPlayer(playerId, rowGames, qualificationMode = "scope") {
+    const scope = currentScope();
+
+    if (qualificationMode === "scope" && scope?.type === "year") {
+      const archivedPeriods = archivedPeriodsForYear(scope.year);
+
+      if (!archivedPeriods.length) {
+        return {
+          qualified: false,
+          gamesNeeded: 0,
+          qualificationTag: "jaarclassificatie nog niet actief",
+          qualificationSummary: "Nog geen afgesloten periode in dit jaar"
+        };
+      }
+
+      const missingPeriods = archivedPeriods.map((period) => {
+        const games = playerGamesInPeriod(playerId, period.id);
+        return {
+          period,
+          games,
+          needed: Math.max(0, QUALIFYING_GAMES - games)
+        };
+      }).filter((item) => item.needed > 0);
+
+      const gamesNeeded = missingPeriods.reduce((sum, item) => sum + item.needed, 0);
+
+      let qualificationTag = "";
+      if (missingPeriods.length === 1) {
+        const item = missingPeriods[0];
+        qualificationTag =
+          `nog ${item.needed} in ${item.period.name}`;
+      } else if (missingPeriods.length > 1) {
+        qualificationTag =
+          `tekort in ${missingPeriods.length} periodes`;
+      }
+
+      return {
+        qualified: missingPeriods.length === 0,
+        gamesNeeded,
+        qualificationTag,
+        qualificationSummary: missingPeriods.length === 0
+          ? `Minimaal ${QUALIFYING_GAMES} potjes in alle ${archivedPeriods.length} afgesloten periodes`
+          : `Nog niet voldaan aan alle ${archivedPeriods.length} afgesloten periodes`
+      };
+    }
+
+    const gamesNeeded = Math.max(0, QUALIFYING_GAMES - rowGames);
+    return {
+      qualified: rowGames >= QUALIFYING_GAMES,
+      gamesNeeded,
+      qualificationTag: rowGames >= QUALIFYING_GAMES
+        ? ""
+        : `nog ${gamesNeeded} potje${gamesNeeded === 1 ? "" : "s"}`,
+      qualificationSummary: rowGames >= QUALIFYING_GAMES
+        ? `Minimaal ${QUALIFYING_GAMES} potjes`
+        : `Nog ${gamesNeeded} potje${gamesNeeded === 1 ? "" : "s"} nodig`
+    };
+  }
+
+  function qualificationRuleText() {
+    const scope = currentScope();
+
+    if (scope?.type === "year") {
+      const archivedPeriods = archivedPeriodsForYear(scope.year);
+      if (!archivedPeriods.length) {
+        return `Jaarstand voorlopig · officiële klassering start na de eerste afgesloten periode · ${RANKING_CRITERIA[rankingCriterion()].short}`;
+      }
+      return `Officieel: minimaal ${QUALIFYING_GAMES} potjes in iedere afgesloten periode (${archivedPeriods.length}) · ${RANKING_CRITERIA[rankingCriterion()].short}`;
+    }
+
+    return `Vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
+  }
+
+  function getStats(games = state.games, { qualificationMode = "scope" } = {}) {
     const stats = new Map(state.players.map((player) => [player.id, {
       id: player.id, name: player.name, active: player.active, games: 0, wins: 0, penalties: 0
     }]));
+
     for (const game of games) {
       for (const entry of game.entries || []) {
         const row = stats.get(entry.player_id);
         if (!row) continue;
         row.games += 1;
         row.penalties += Number(entry.penalty ?? scorePenalty(Number(entry.cards)));
-        if (entry.player_id === game.winner) row.wins += 1;
+        if (sameId(entry.player_id, game.winner)) row.wins += 1;
       }
     }
-    return [...stats.values()].map((row) => ({
-      ...row,
-      qualified: row.games >= QUALIFYING_GAMES,
-      gamesNeeded: Math.max(0, QUALIFYING_GAMES - row.games),
-      winRate: row.games ? row.wins / row.games : 0,
-      averagePenalty: row.games ? row.penalties / row.games : 0
-    })).sort((a, b) => {
-      // Officieel gekwalificeerden blijven bovenaan. Spelers met 1–9 potjes
-      // worden daaronder al volgens het gekozen criterium gesorteerd, maar
-      // blijven grijs. Spelers zonder gespeelde potjes staan altijd onderaan.
+
+    return [...stats.values()].map((row) => {
+      const qualification = qualificationForPlayer(
+        row.id,
+        row.games,
+        qualificationMode
+      );
+
+      return {
+        ...row,
+        ...qualification,
+        winRate: row.games ? row.wins / row.games : 0,
+        averagePenalty: row.games ? row.penalties / row.games : 0
+      };
+    }).sort((a, b) => {
+      // Officieel geklasseerden bovenaan. Niet-geklasseerden blijven grijs,
+      // maar worden onderling wel volgens het gekozen criterium gesorteerd.
+      // Spelers zonder potjes staan altijd onderaan.
       if (a.qualified !== b.qualified) return a.qualified ? -1 : 1;
+
       const aHasGames = a.games > 0;
       const bHasGames = b.games > 0;
       if (aHasGames !== bHasGames) return aHasGames ? -1 : 1;
       if (!aHasGames && !bHasGames) return a.name.localeCompare(b.name, "nl");
+
       return compareRankingRows(a, b);
     });
   }
@@ -1214,7 +1321,9 @@
         officialPosition += 1;
         position = ["🥇", "🥈", "🥉"][officialPosition - 1] || String(officialPosition);
       }
-      const qualificationTag = row.qualified ? "" : `<span class="qualification-tag">nog ${row.gamesNeeded} potje${row.gamesNeeded === 1 ? "" : "s"}</span>`;
+      const qualificationTag = row.qualified || !row.qualificationTag
+        ? ""
+        : `<span class="qualification-tag">${escapeHtml(row.qualificationTag)}</span>`;
       const inactiveTag = row.active ? "" : '<span class="inactive-tag">inactief</span>';
       return `<tr class="${row.qualified ? "qualified-row" : "unqualified-row"}">
         <td class="position-medal">${position}</td>
@@ -1404,8 +1513,10 @@
     else delete elements.leaderName.dataset.playerHistory;
     elements.leaderDetail.textContent = leader
       ? leaderDetailText(leader)
-      : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
-    elements.rankingRuleLabel.textContent = `Vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
+      : currentScope()?.type === "year"
+        ? "Nog niemand voldoet aan de voorwaarden voor de officiële jaarstand"
+        : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
+    elements.rankingRuleLabel.textContent = qualificationRuleText();
 
     elements.rankingBody.innerHTML = rankingRowsHtml(stats);
 
@@ -1450,12 +1561,13 @@
 
   function renderHistory() {
     const games = filteredHistoryGames();
-    const stats = getStats(games).filter((row) => row.games > 0);
+    const stats = getStats(games, { qualificationMode: "games" }).filter((row) => row.games > 0);
     elements.historyPeriodLabel.textContent = `${scopeTitle()} · ${historyPeriodText()}`;
     elements.historyGameCount.textContent = games.length;
     elements.historyPlayerCount.textContent = stats.length;
     elements.historyRankingBody.innerHTML = rankingRowsHtml(stats, "Geen spelers in deze periode.");
-    elements.historyRankingRuleLabel.textContent = `Vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
+    elements.historyRankingRuleLabel.textContent =
+      `Binnen deze selectie: vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
     elements.historyPrintTitle.textContent = `${scopeTitle()} – stand en historie`;
     elements.historyPrintMeta.textContent = `${historyPeriodText()} · ${games.length} potje${games.length === 1 ? "" : "s"} · rapport gemaakt op ${formatLogDate(new Date().toISOString())}`;
     renderGameList(elements.historyGames, games, scopeIsWritable());
@@ -1608,7 +1720,9 @@
 
   function printPosition(row, index) {
     if (!row.qualified) return "–";
-    const qualifiedBefore = getStats(scopeGames()).slice(0, index).filter((item) => item.qualified).length;
+    const qualifiedBefore = getStats(scopeGames(), { qualificationMode: "games" })
+      .slice(0, index)
+      .filter((item) => item.qualified).length;
     return String(qualifiedBefore + 1);
   }
 
@@ -1624,9 +1738,14 @@
   }
 
   function printSelectedStandings() {
+    const period = currentPeriod();
+    if (!period?.is_archived) {
+      return showToast("Stand afdrukken is alleen beschikbaar nadat een periode is gearchiveerd.", true);
+    }
+
     const games = scopeGames();
     if (!games.length) return showToast("Er zijn geen potjes in deze stand om af te drukken.", true);
-    const stats = getStats(games);
+    const stats = getStats(games, { qualificationMode: "games" });
     elements.printStandingsTitle.textContent = scopeTitle();
     elements.printStandingsMeta.textContent = `${games.length} potje${games.length === 1 ? "" : "s"} · ${RANKING_CRITERIA[rankingCriterion()].label} · vanaf ${QUALIFYING_GAMES} potjes officieel`;
     elements.printStandingsBody.innerHTML = printableRankingRows(stats);
@@ -1646,7 +1765,9 @@
   function printTopThreeCertificates() {
     const period = currentPeriod();
     if (!period?.is_archived) return showToast("Oorkondes zijn beschikbaar voor een gearchiveerde periode.", true);
-    const stats = getStats(scopeGames()).filter((row) => row.qualified).slice(0, 3);
+    const stats = getStats(scopeGames(), { qualificationMode: "games" })
+      .filter((row) => row.qualified)
+      .slice(0, 3);
     if (!stats.length) return showToast(`Er zijn geen officieel geklasseerde spelers met minimaal ${QUALIFYING_GAMES} potjes.`, true);
 
     elements.certificatesPrintSheet.innerHTML = stats.map((row, index) => `<article class="certificate-page">
@@ -2401,7 +2522,7 @@
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
-        .register("sw.js?v=23", { updateViaCache: "none" })
+        .register("sw.js?v=24", { updateViaCache: "none" })
         .catch(() => {});
     }
   }
