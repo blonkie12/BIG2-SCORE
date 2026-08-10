@@ -1052,3 +1052,127 @@ dialog.image-viewer-dialog::backdrop {
   .certificate-rule { color: #78716c; font-size: 9pt; }
   .certificate-footer { width: 85%; margin-top: auto; padding-top: 5mm; display: flex; justify-content: space-between; color: #78716c; border-top: 1px solid #d6d3d1; font-size: 8pt; }
 }
+
+
+/* v26 – compacte mobiele header */
+@media (max-width: 760px) {
+  .app-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 44%);
+    align-items: start;
+    gap: 8px 12px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: 10px;
+  }
+
+  .app-header > div:first-child {
+    min-width: 0;
+    padding-top: 2px;
+  }
+
+  .app-header > div:first-child .eyebrow {
+    margin-bottom: 4px;
+    font-size: .66rem;
+    letter-spacing: .11em;
+    white-space: nowrap;
+  }
+
+  .app-header h1 {
+    margin: 0;
+    font-size: clamp(1.65rem, 8vw, 2.25rem);
+    line-height: 1.02;
+  }
+
+  .header-actions {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    grid-template-areas:
+      "user user"
+      "period refresh";
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .user-button {
+    grid-area: user;
+    width: 100%;
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 9px;
+    justify-content: flex-start;
+    border-radius: 11px;
+    font-size: .76rem;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .period-picker {
+    grid-area: period;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .period-picker select {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 6px 30px 6px 9px;
+    border-radius: 11px;
+    font-size: .74rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+  }
+
+  .header-actions .icon-button {
+    grid-area: refresh;
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 0;
+    border-radius: 11px;
+    font-size: 1.05rem;
+  }
+
+  .app-shell {
+    padding-top: 8px;
+  }
+}
+
+@media (max-width: 390px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) minmax(142px, 46%);
+    gap: 7px 9px;
+  }
+
+  .app-header h1 {
+    font-size: 1.62rem;
+  }
+
+  .app-header > div:first-child .eyebrow {
+    font-size: .58rem;
+  }
+
+  .user-button {
+    min-height: 36px;
+    font-size: .7rem;
+  }
+
+  .period-picker select {
+    min-height: 40px;
+    font-size: .68rem;
+  }
+
+  .header-actions {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+
+  .header-actions .icon-button {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

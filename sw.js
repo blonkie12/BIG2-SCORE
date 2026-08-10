@@ -1,10 +1,10 @@
-const CACHE = "big2-v25-compact-period-header";
+const CACHE = "big2-v26-compact-mobile-header";
 const APP_SHELL = [
   "./",
   "index.html",
-  "styles.css?v=25",
-  "app.js?v=25",
-  "config.js?v=25",
+  "styles.css?v=26",
+  "app.js?v=26",
+  "config.js?v=26",
   "manifest.webmanifest",
   "icon.svg",
   "big-two-handrangschikking.webp"
@@ -84,7 +84,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.endsWith("/config.js") || url.pathname.endsWith("config.js")) {
-    event.respondWith(networkFirst(event.request, "config.js?v=25"));
+    event.respondWith(networkFirst(event.request, "config.js?v=26"));
     return;
   }
 
