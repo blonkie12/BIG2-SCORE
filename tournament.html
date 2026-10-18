@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Big Two-scoreapp met jaarstanden, periodes, archief, offline invoer en eindstanden.">
+  <title>Big Two Toernooi</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css?v=27">
+</head>
+<body data-tournament>
+  <header class="app-header">
+    <div>
+      <p id="header-context-label" class="eyebrow">Jaarstand</p>
+      <h1 id="group-title">Big Two Score</h1>
+    </div>
+    <div class="header-actions">
+      <button id="current-user-button" class="user-button" type="button" title="Gebruiker wisselen">👤 Kies gebruiker</button>
+      <label class="period-picker" title="Kies jaarstand of periode">
+        <span class="visually-hidden">Jaarstand of periode</span>
+        <select id="period-select" aria-label="Kies jaarstand of periode"></select>
+      </label>
+      <button id="refresh-button" class="icon-button" type="button" aria-label="Vernieuwen" title="Vernieuwen">↻</button>
+    </div>
+  </header>
+
+  <div id="mode-banner" class="mode-banner" hidden></div>
+  <section id="offline-banner" class="offline-banner" aria-live="polite" hidden>
+    <div class="offline-banner-copy">
+      <strong id="offline-title">Offline — stand gepauzeerd</strong>
+      <span id="offline-detail">De laatst gesynchroniseerde stand blijft zichtbaar.</span>
+    </div>
+    <button id="sync-button" class="sync-button" type="button">Nu synchroniseren</button>
+  </section>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <main class="app-shell">
+    <section id="view-dashboard" class="view active" aria-labelledby="tab-dashboard">
+      <section id="archive-actions-bar" class="archive-actions-bar no-print" aria-label="Archiefacties" hidden>
+        <button id="print-standings-button" class="secondary-button compact" type="button">Stand afdrukken</button>
+        <button id="print-certificates-button" class="secondary-button compact" type="button">Oorkondes top 3</button>
+      </section>
+      <div class="summary-grid">
+        <article class="summary-card">
+          <span>Potjes</span>
+          <strong id="total-games">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Spelers</span>
+          <strong id="total-players">0</strong>
+        </article>
+        <article class="summary-card leader-card">
+          <span>Koploper</span>
+          <button id="leader-name" class="leader-name-button" type="button" disabled>–</button>
+          <small id="leader-detail">Nog geen uitslagen</small>
+        </article>
+      </div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Ranglijst</p>
+            <h2>Stand</h2>
+          </div>
+          <span id="ranking-rule-label" class="muted">Vanaf het eerste potje · laagste gemiddelde straf bovenaan</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Speler</th>
+                <th>Gem. straf</th>
+                <th>Potjes</th>
+                <th>Gewonnen</th>
+                <th>Winst%</th>
+                <th>Straf totaal</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Laatste uitslagen</p>
+            <h2>Recente potjes</h2>
+          </div>
+          <span class="muted">Laatste 2 potjes</span>
+        </div>
+        <div id="recent-games" class="game-list empty-state">Nog geen potjes ingevoerd.</div>
+      </section>
+
+      <section class="panel game-rules-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Snel overzicht</p>
+            <h2>Spelregels</h2>
+          </div>
+          <span class="muted">Handrangschikking van hoog naar laag</span>
+        </div>
+
+        <button
+          id="hand-ranking-open"
+          class="hand-ranking-open"
+          type="button"
+          aria-label="Open de korte spelregels op volledig scherm"
+        >
+          <figure class="hand-ranking-figure">
+            <img
+              src="big-two-handrangschikking.webp"
+              alt="Big Two handrangschikking van hoog naar laag, met kaartvolgorde, symboolvolgorde en de belangrijkste spelregels"
+              loading="lazy"
+              decoding="async"
+            >
+            <figcaption>🔍 Tik om te openen en in te zoomen</figcaption>
+          </figure>
+        </button>
+
+        <details class="rules-details">
+          <summary>📖 Volledige spelregels tonen</summary>
+          <div class="rules-content">
+            <h3>1. Doel van het spel</h3>
+            <p>Het doel is om als eerste al je kaarten kwijt te raken. De speler die als eerste geen kaarten meer heeft, wint het potje.</p>
+
+            <h3>2. Schudden en delen</h3>
+            <p>De winnaar van het vorige potje is de dealer van het volgende potje. De dealer verzamelt, schudt en deelt de kaarten naar eigen inzicht. De kaarten hoeven niet verplicht één voor één te worden gedeeld. Bij het eerste potje bepalen de spelers onderling wie dealer is.</p>
+
+            <h3>3. Spelen met vier spelers</h3>
+            <p>Bij vier spelers krijgt iedere speler 13 kaarten. Alle 52 kaarten worden verdeeld.</p>
+
+            <h3>4. Spelen met drie spelers</h3>
+            <p>Bij drie spelers worden de kaarten verdeeld als 17–17–18. De speler die de 3♦ ontvangt, krijgt ook de overgebleven kaart en heeft daardoor 18 kaarten.</p>
+
+            <h3>5. Begin van het potje</h3>
+            <p>De speler met de 3♦ begint. De eerste kaart of combinatie hoeft de 3♦ niet te bevatten. De speler mag de 3♦ bewaren en later in het potje gebruiken.</p>
+
+            <h3>6. Kaartvolgorde</h3>
+            <p><strong>Van laag naar hoog:</strong> 3–4–5–6–7–8–9–10–J–Q–K–A–2. De 2 is de hoogste kaart.</p>
+
+            <h3>7. Symboolvolgorde</h3>
+            <p><strong>Van laag naar hoog:</strong> ♦ ruiten – ♣ klaveren – ♥ harten – ♠ schoppen. De rode of zwarte kleur is niet belangrijk; alleen het symbool telt.</p>
+
+            <h3>8. Losse kaart</h3>
+            <p>Een losse kaart bestaat uit exact één kaart. Een volgende speler moet een hogere losse kaart spelen of passen.</p>
+
+            <h3>9. Paar</h3>
+            <p>Een paar bestaat uit exact twee kaarten met dezelfde waarde. Er worden geen willekeurige extra kaarten bij gespeeld. Een hoger paar verslaat een lager paar.</p>
+
+            <h3>10. Three of a kind</h3>
+            <p>Three of a kind bestaat uit exact drie kaarten met dezelfde waarde. Er worden geen extra kaarten bij gespeeld. Een hogere three of a kind verslaat een lagere.</p>
+
+            <h3>11. Straight</h3>
+            <p>Een straight bestaat uit vijf opeenvolgende kaarten. De symbolen mogen verschillen. De 2 mag alleen als hoogste kaart worden gebruikt. J–Q–K–A–2 is toegestaan; A–2–3–4–5 en 2–3–4–5–6 zijn niet toegestaan.</p>
+
+            <h3>12. Flush</h3>
+            <p>Een flush bestaat uit vijf kaarten met hetzelfde symbool. De kaarten hoeven niet opeenvolgend te zijn.</p>
+
+            <h3>13. Full house</h3>
+            <p>Een full house bestaat uit drie kaarten met dezelfde waarde plus een paar. De waarde van de drie gelijke kaarten bepaalt de sterkte van het full house.</p>
+
+            <h3>14. Four of a kind</h3>
+            <p>Four of a kind bestaat uit vier kaarten met dezelfde waarde plus één willekeurige vijfde kaart. De waarde van de vier gelijke kaarten bepaalt de sterkte.</p>
+
+            <h3>15. Straight flush</h3>
+            <p>Een straight flush bestaat uit vijf opeenvolgende kaarten met hetzelfde symbool. De 2 mag ook hier alleen als hoogste kaart worden gebruikt.</p>
+
+            <h3>16. Royal flush</h3>
+            <p>Een royal flush bestaat uit J–Q–K–A–2 met hetzelfde symbool. Dit is de hoogste combinatie in het spel en eindigt altijd met een 2.</p>
+
+            <h3>17. Volgorde van vijfkaartcombinaties</h3>
+            <p><strong>Van laag naar hoog bij vijf kaarten:</strong> straight, flush, full house, four of a kind, straight flush en royal flush. Three of a kind is een losse combinatie van drie kaarten.</p>
+
+            <h3>18. Niet toegestane combinaties</h3>
+            <p>Two pair en high card als combinatie van vijf kaarten zijn niet toegestaan.</p>
+
+            <h3>19. Een combinatie overtreffen</h3>
+            <p>Je speelt altijd hetzelfde aantal kaarten als de voorgaande speler: één kaart op één kaart, een paar op een paar en een vijfkaartcombinatie op een vijfkaartcombinatie. Bij vijf kaarten mag een hogere soort combinatie een lagere soort verslaan.</p>
+
+            <h3>20. Passen</h3>
+            <p>Een speler mag passen wanneer die niet kan of niet wil spelen. Wie heeft gepast, mag gedurende diezelfde slag niet opnieuw meedoen.</p>
+
+            <h3>21. Een nieuwe slag beginnen</h3>
+            <p>Wanneer alle andere actieve spelers hebben gepast, eindigt de slag. De speler die als laatste kaarten heeft gelegd, begint de volgende slag en mag opnieuw kiezen uit een losse kaart, een paar of een geldige vijfkaartcombinatie.</p>
+
+            <h3>22. Einde van het potje</h3>
+            <p>Het potje stopt zodra een speler geen kaarten meer heeft. De winnaar krijgt één gewonnen potje en nul strafpunten. De kaarten van de andere spelers worden geteld voor de strafpunten.</p>
+
+            <h3>23. Wie voert de uitslag in?</h3>
+            <p>De uitslag mag door iedere deelnemer worden ingevoerd, ook door de winnaar. De winnaar blijft verantwoordelijk voor het verzamelen, schudden en delen van de kaarten voor het volgende potje.</p>
+
+            <h3>24. Strafpunten</h3>
+            <ul>
+              <li>0 kaarten: 0 strafpunten.</li>
+              <li>1–9 kaarten: 1 strafpunt per kaart.</li>
+              <li>10–12 kaarten: 2 strafpunten per kaart.</li>
+              <li>13 kaarten of meer: altijd maximaal 39 strafpunten.</li>
+            </ul>
+
+            <h3>25. Toelating tot de ranglijst</h3>
+            <p>Een speler telt vanaf 10 gespeelde potjes officieel mee. Spelers met 1–9 potjes worden al correct gesorteerd, maar blijven grijs en krijgen nog geen officiële positie. Spelers met 0 potjes blijven grijs en staan altijd onderaan.</p>
+
+            <h3>26. Rangschikking</h3>
+            <p>Alleen de beheerder bepaalt het primaire rangschikkingscriterium: gemiddelde strafpunten, gewonnen potjes, winstpercentage, totaal strafpunten of gespeelde potjes. Bij een gelijke stand gebruikt de website de overige statistieken en daarna de alfabetische volgorde.</p>
+          </div>
+        </details>
+      </section>
+    </section>
+
+    <section id="view-entry" class="view" aria-labelledby="tab-entry">
+      <form id="game-form" class="panel form-panel" novalidate>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Nieuwe uitslag</p>
+            <h2>Potje invoeren</h2>
+          </div>
+          <span id="entry-period-label" class="period-status-badge">Actieve periode</span>
+        </div>
+
+        <fieldset>
+          <legend>1. Wie speelden mee?</legend>
+          <p class="field-help">Tik alle deelnemers aan.</p>
+          <p id="remembered-players-note" class="remembered-players-note" hidden></p>
+          <div id="participant-chips" class="chip-grid"></div>
+        </fieldset>
+
+        <div class="form-grid two-columns">
+          <label>
+            <span>2. Wie heeft gewonnen?</span>
+            <select id="winner-select" required disabled>
+              <option value="">Selecteer eerst spelers</option>
+            </select>
+          </label>
+          <label>
+            <span>Wie voert dit in?</span>
+            <select id="entered-by-select" required disabled>
+              <option value="">Selecteer eerst spelers</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset id="cards-fieldset" disabled>
+          <legend>3. Overgebleven kaarten</legend>
+          <p class="field-help">De winnaar krijgt automatisch 0. Bij drie spelers kun je tot 18 kaarten invoeren. Strafpunten zijn maximaal 39.</p>
+          <div id="cards-inputs" class="score-inputs"></div>
+        </fieldset>
+
+        <label>
+          <span>Opmerking <small>(optioneel)</small></span>
+          <input id="game-note" type="text" maxlength="160" placeholder="Bijvoorbeeld: revanchepotje">
+        </label>
+
+        <div id="game-validation" class="validation-message" hidden></div>
+        <p id="offline-entry-note" class="offline-entry-note" hidden>
+          Je bent offline. Dit potje wordt alleen op dit apparaat bewaard en later gesynchroniseerd.
+          De ranglijst blijft tot die tijd ongewijzigd.
+        </p>
+        <p class="device-time-note">
+          Datum en tijd worden bij het opslaan rechtstreeks van deze telefoon overgenomen.
+        </p>
+        <button class="primary-button" type="submit">Potje opslaan</button>
+      </form>
+    </section>
+
+    <section id="view-history" class="view" aria-labelledby="tab-history">
+      <section class="panel history-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Archief</p>
+            <h2>Historie en periodestand</h2>
+          </div>
+          <div class="history-export-actions no-print">
+            <button id="export-button" class="secondary-button" type="button">CSV exporteren</button>
+            <button id="history-pdf-button" class="secondary-button" type="button">PDF opslaan</button>
+          </div>
+        </div>
+
+        <form id="history-filter-form" class="history-filter no-print">
+          <label>
+            <span>Begindatum</span>
+            <input id="history-start-date" type="date">
+          </label>
+          <label>
+            <span>Einddatum</span>
+            <input id="history-end-date" type="date">
+          </label>
+          <button class="primary-button compact" type="submit">Periode tonen</button>
+          <button id="history-clear-button" class="secondary-button" type="button">Alles tonen</button>
+        </form>
+
+        <div id="history-print-header" class="print-only">
+          <p class="eyebrow">Big Two-rapport</p>
+          <h1 id="history-print-title">Periodestand</h1>
+          <p id="history-print-meta"></p>
+        </div>
+
+        <div class="history-period-summary">
+          <div>
+            <span>Geselecteerde periode</span>
+            <strong id="history-period-label">Alle gespeelde potjes</strong>
+          </div>
+          <div>
+            <span>Aantal potjes</span>
+            <strong id="history-game-count">0</strong>
+          </div>
+          <div>
+            <span>Actieve spelers</span>
+            <strong id="history-player-count">0</strong>
+          </div>
+        </div>
+
+        <section class="period-ranking-section">
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="eyebrow">Stand over de periode</p>
+              <h3>Ranglijst</h3>
+            </div>
+            <span id="history-ranking-rule-label" class="muted">Vanaf het eerste potje binnen de gekozen periode</span>
+          </div>
+          <div class="table-wrap period-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Speler</th>
+                  <th>Gem. straf</th>
+                  <th>Potjes</th>
+                  <th>Gewonnen</th>
+                  <th>Winst%</th>
+                  <th>Straf totaal</th>
+                </tr>
+              </thead>
+              <tbody id="history-ranking-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="history-list-heading">
+          <div>
+            <p class="eyebrow">Potjes in selectie</p>
+            <h3>Uitslagen</h3>
+          </div>
+        </div>
+        <div id="history-games" class="game-list empty-state">Nog geen potjes ingevoerd.</div>
+      </section>
+    </section>
+
+    <section id="view-logbook" class="view" aria-labelledby="tab-logbook">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Controle</p>
+            <h2>Logboek</h2>
+          </div>
+          <span class="muted">Bezoeken en wijzigingen</span>
+        </div>
+        <p class="field-help">De naam is gebaseerd op de gebruiker die bovenaan de site is gekozen. Die keuze wordt niet gecontroleerd: iedereen kan elke naam kiezen. Het logboek is bedoeld om samen terug te kijken, niet als sluitend identiteitsbewijs.</p>
+        <div id="logbook-list" class="log-list empty-state">Nog geen logboekregels.</div>
+      </section>
+    </section>
+
+    <section id="view-admin" class="view" aria-labelledby="tab-admin">
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Beheer</p>
+            <h2>Spelers</h2>
+          </div>
+        </div>
+        <form id="add-player-form" class="stack-form">
+          <label>
+            <span>Spelers toevoegen</span>
+            <textarea id="new-player-names" rows="7" maxlength="1000" autocomplete="off" placeholder="Corne&#10;Peter&#10;Jan&#10;Lisa"></textarea>
+          </label>
+          <p class="field-help">Plak alle namen in één keer: één naam per regel, of gescheiden door komma’s. Alleen de beheerderscode kan spelers toevoegen, activeren, deactiveren of definitief verwijderen.</p>
+          <button class="primary-button compact" type="submit">Namen toevoegen</button>
+        </form>
+        <div id="admin-player-list" class="admin-list"></div>
+      </section>
+
+      <section class="panel setup-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Competitiebeheer</p>
+            <h2>Periodes</h2>
+          </div>
+          <span class="muted">Alleen met beheerderscode</span>
+        </div>
+        <form id="period-create-form" class="period-create-form">
+          <label class="grow">
+            <span>Nieuwe periode</span>
+            <input id="period-name-input" type="text" minlength="2" maxlength="60" placeholder="Bijvoorbeeld: Najaar 2026" required>
+          </label>
+          <label class="period-year-field">
+            <span>Jaar</span>
+            <input id="period-year-input" type="number" min="2020" max="2100" inputmode="numeric" required>
+          </label>
+          <button class="primary-button compact" type="submit">Periode aanmaken</button>
+        </form>
+        <p class="field-help">Een gearchiveerde periode is definitief alleen-lezen: er kunnen geen potjes meer worden toegevoegd, aangepast of verwijderd. Laat daarom vóór archiveren alle telefoons synchroniseren.</p>
+        <div id="period-admin-list" class="period-admin-list"></div>
+      </section>
+
+      <section class="panel setup-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Ranglijstbeheer</p>
+            <h2>Rangschikking bepalen</h2>
+          </div>
+          <span class="muted">Alleen met beheerderscode</span>
+        </div>
+        <form id="ranking-settings-form" class="stack-form ranking-settings-form">
+          <label>
+            <span>Primair rangschikkingscriterium</span>
+            <select id="ranking-criterion-select" required>
+              <option value="average_penalty">Gemiddelde strafpunten – laagste bovenaan</option>
+              <option value="wins">Gewonnen potjes – meeste bovenaan</option>
+              <option value="win_rate">Winstpercentage – hoogste bovenaan</option>
+              <option value="total_penalty">Totaal strafpunten – laagste bovenaan</option>
+              <option value="games_played">Gespeelde potjes – meeste bovenaan</option>
+            </select>
+          </label>
+          <p class="field-help">De keuze geldt direct voor de algemene ranglijst en de periodestand. Spelers met 1–9 potjes worden al volgens dit criterium gesorteerd, maar blijven grijs en tellen pas vanaf 10 potjes officieel mee. Spelers met 0 potjes staan onderaan.</p>
+          <button class="primary-button compact" type="submit">Rangschikking opslaan</button>
+        </form>
+
+        <div class="active-rule-card">
+          <span>Huidige rangschikking</span>
+          <strong id="active-ranking-rule">Laagste gemiddelde strafpunten</strong>
+        </div>
+
+        <ul class="rule-list">
+          <li><strong>Kwalificatie:</strong> vanaf 10 gespeelde potjes.</li>
+          <li><strong>Gelijke stand:</strong> automatisch beslist met de overige statistieken en daarna alfabetisch.</li>
+          <li><strong>1–9 kaarten:</strong> 1 strafpunt per kaart.</li>
+          <li><strong>10–12 kaarten:</strong> dubbele strafpunten.</li>
+          <li><strong>13 kaarten of meer:</strong> altijd maximaal 39 strafpunten.</li>
+        </ul>
+      </section>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+    <button id="tab-dashboard" class="nav-button active" data-view="dashboard" type="button"><span>▦</span>Stand</button>
+    <button id="tab-entry" class="nav-button accent" data-view="entry" type="button"><span>＋</span>Invoeren</button>
+    <button id="tab-history" class="nav-button" data-view="history" type="button"><span>☷</span>Historie</button>
+    <button id="tab-logbook" class="nav-button" data-view="logbook" type="button"><span>◷</span>Logboek</button>
+    <button id="tab-admin" class="nav-button" data-view="admin" type="button"><span>⚙</span>Beheer</button>
+  </nav>
+
+  <dialog id="admin-pin-dialog">
+    <form method="dialog" class="dialog-card">
+      <h2>Beheerderscode</h2>
+      <label><span>Vul de beheerderscode in</span><input id="admin-pin-input" type="password" autocomplete="off" required autofocus></label>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit" formnovalidate>Annuleren</button><button class="primary-button" value="confirm" type="submit">Doorgaan</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="identity-dialog">
+    <form id="identity-form" method="dialog" class="dialog-card">
+      <p class="eyebrow">Logboek</p>
+      <h2>Wie gebruikt de site?</h2>
+      <p>Deze naam wordt geregistreerd bij bezoeken en wijzigingen.</p>
+      <label>
+        <span>Gebruiker</span>
+        <select id="identity-select" required></select>
+      </label>
+      <button class="primary-button" value="default" type="submit">Doorgaan</button>
+    </form>
+  </dialog>
+
+  <dialog id="edit-game-dialog" class="wide-dialog">
+    <form id="edit-game-form" class="dialog-card">
+      <p class="eyebrow">Correctie</p>
+      <h2>Potje aanpassen</h2>
+      <p>Alle wijzigingen zijn alleen mogelijk met de beheerderscode en worden in het logboek vastgelegd.</p>
+      <fieldset>
+        <legend>Deelnemers</legend>
+        <p class="field-help">Selecteer 2 tot 8 spelers. Actieve spelers kunnen worden toegevoegd; bestaande inactieve deelnemers blijven beschikbaar voor historische correcties.</p>
+        <div id="edit-participant-chips" class="chip-grid"></div>
+      </fieldset>
+      <div class="form-grid two-columns">
+        <label>
+          <span>Winnaar</span>
+          <select id="edit-winner-select" required></select>
+        </label>
+        <label>
+          <span>Wie voerde dit in?</span>
+          <select id="edit-entered-by-select" required></select>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Overgebleven kaarten</legend>
+        <div id="edit-cards-inputs" class="score-inputs"></div>
+      </fieldset>
+      <label>
+        <span>Opmerking <small>(optioneel)</small></span>
+        <input id="edit-game-note" type="text" maxlength="160">
+      </label>
+      <div id="edit-game-validation" class="validation-message" hidden></div>
+      <div class="dialog-actions">
+        <button class="secondary-button" type="button" onclick="this.closest('dialog').close()">Annuleren</button>
+        <button class="primary-button compact" type="submit">Wijziging opslaan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <section id="standings-print-sheet" class="print-document" aria-hidden="true">
+    <div class="print-score-header">
+      <p>BIG TWO · OFFICIËLE STAND</p>
+      <h1 id="print-standings-title">Eindstand</h1>
+      <span id="print-standings-meta"></span>
+    </div>
+    <table class="print-score-table">
+      <thead><tr><th>#</th><th>Speler</th><th>Gem. straf</th><th>Potjes</th><th>Gewonnen</th><th>Winst%</th><th>Straf totaal</th></tr></thead>
+      <tbody id="print-standings-body"></tbody>
+    </table>
+    <p id="print-standings-footer" class="print-score-footer"></p>
+  </section>
+
+  <section id="certificates-print-sheet" class="print-document certificates-document" aria-hidden="true"></section>
+
+  <dialog id="image-viewer-dialog" class="image-viewer-dialog" aria-label="Korte Big Two-spelregels">
+    <div class="image-viewer-shell">
+      <div class="image-viewer-toolbar">
+        <div>
+          <strong>Korte spelregels</strong>
+          <span id="image-zoom-label" aria-live="polite">100%</span>
+        </div>
+        <div class="image-viewer-actions">
+          <button id="image-zoom-out" class="image-viewer-button" type="button" aria-label="Uitzoomen" title="Uitzoomen">−</button>
+          <button id="image-zoom-reset" class="image-viewer-button image-viewer-reset" type="button" aria-label="Zoom herstellen" title="Zoom herstellen">100%</button>
+          <button id="image-zoom-in" class="image-viewer-button" type="button" aria-label="Inzoomen" title="Inzoomen">+</button>
+          <button id="image-viewer-close" class="image-viewer-button image-viewer-close" type="button" aria-label="Sluiten" title="Sluiten">×</button>
+        </div>
+      </div>
+
+      <div id="image-viewer-stage" class="image-viewer-stage">
+        <img
+          id="image-viewer-image"
+          src="big-two-handrangschikking.webp"
+          alt="Vergrote Big Two handrangschikking en korte spelregels"
+          draggable="false"
+        >
+      </div>
+
+      <p class="image-viewer-help">
+        Knijp of gebruik +/− om te zoomen. Sleep de afbeelding wanneer je bent ingezoomd.
+      </p>
+    </div>
+  </dialog>
+
+  <dialog id="player-history-dialog" class="wide-dialog">
+    <div class="dialog-card player-history-dialog-card">
+      <div class="player-history-header">
+        <div>
+          <p class="eyebrow">Spelersprofiel</p>
+          <h2 id="player-history-name">Spelgeschiedenis</h2>
+          <p id="player-history-status" class="player-history-status"></p>
+        </div>
+        <form method="dialog">
+          <button class="icon-button player-history-close" type="submit" aria-label="Sluiten" title="Sluiten">×</button>
+        </form>
+      </div>
+
+      <div id="player-history-summary" class="player-history-summary"></div>
+
+      <section class="player-opponent-section" aria-labelledby="player-opponent-title">
+        <div class="player-history-section-heading">
+          <div>
+            <p class="eyebrow">Onderlinge resultaten</p>
+            <h3 id="player-opponent-title">Tegenstanders</h3>
+          </div>
+          <span id="player-opponent-rule" class="muted"></span>
+        </div>
+        <div class="player-opponent-highlights">
+          <div id="player-opponent-ranking-leader" class="opponent-highlight"></div>
+          <div id="player-opponent-wins-leader" class="opponent-highlight"></div>
+        </div>
+        <div id="player-opponent-list" class="player-opponent-list empty-state">Nog geen tegenstanders.</div>
+      </section>
+
+      <div class="player-history-section-heading player-games-heading">
+        <div>
+          <p class="eyebrow">Alle gespeelde potjes</p>
+          <h3>Uitslagen</h3>
+        </div>
+        <span id="player-history-count" class="muted"></span>
+      </div>
+      <div id="player-history-games" class="player-history-list empty-state">Nog geen potjes gespeeld.</div>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog" class="dialog-card">
+      <p class="eyebrow">Bevestigen</p>
+      <h2 id="confirm-title">Weet je het zeker?</h2>
+      <p id="confirm-text"></p>
+      <div class="dialog-actions">
+        <button class="secondary-button" value="cancel">Annuleren</button>
+        <button class="danger-button" value="confirm">Bevestigen</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="config.js?v=27"></script>
+  <script src="tournaments.js?v=27"></script>
+  <script src="app.js?v=27"></script>
+</body>
+</html>

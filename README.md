@@ -1,93 +1,46 @@
-# Big Two Vakantiestand
+# Big Two Score
 
-Mobiele webapp voor een gedeelde Big Two-vakantiecompetitie. De interface draait op GitHub Pages; Supabase bewaart de gedeelde spelers, potjes, scores en het logboek.
+Mobiele scoreapp op GitHub Pages met een gedeelde Supabase-database. Deze versie voegt zelfstandige toernooien toe aan de bestaande jaarstanden, periodes, historie, archief en offline invoer.
 
-## Toegang en beheer
+## Toernooien (v27)
 
-- Er is **geen groepscode** meer.
-- Iedereen die de website kan openen, kan de stand bekijken en een potje toevoegen.
-- De beheerder voegt de spelerslijst toe met de beheerderscode.
-- Alle namen kunnen in één keer worden geplakt: één naam per regel of gescheiden door komma’s.
-- Alleen de beheerderscode kan spelers toevoegen, activeren/deactiveren en potjes aanpassen of verwijderen.
-- De standaard beheerderscode in `supabase/setup.sql` is `9876`. Wijzig deze vóór ingebruikname.
+Ga met je eigen spelersnaam naar **Beheer → Nieuw toernooi**. De bestaande beheerderscode opent de aanmaakpagina. Geef een naam van 2–20 tekens op, selecteer bestaande spelers en vul eventuele nieuwe namen in. De maker doet automatisch mee en wordt game master. Er kan één toernooi tegelijk actief zijn.
 
-Omdat er geen groepscode is, is de inhoud van de website zichtbaar voor iedereen die de GitHub Pages-link kent.
+Bestaande gebruikers openen hun huidige app. Die vindt het actieve toernooi automatisch; zij hebben geen deellink nodig. Hun bestaande naam wordt herkend wanneer deze deelnemer is. De app controleert ook wanneer deze na gebruik op de achtergrond weer wordt geopend. Voor het ontdekken van een nieuw toernooi is verbinding nodig. Een eerder opgehaald actief toernooi kan ook offline worden geopend.
 
-## Ranglijst
+De game master kan via Beheer de naam veranderen, deelnemers toevoegen of verwijderen en afsluiten. Dit werkt op basis van de zelfgekozen naam en goed vertrouwen, zonder extra wachtwoord. Wie de naam van de game master kiest, heeft diens mogelijkheden. De game master blijft deelnemer tot afsluiten. Verwijderen van een deelnemer stopt nieuwe deelname; eerdere uitslagen blijven bestaan en meetellen. Opnieuw toevoegen activeert dezelfde toernooideelnemer.
 
-- Een speler wordt pas officieel geklasseerd na **10 gespeelde potjes**.
-- Spelers met 0–9 potjes blijven zichtbaar, maar staan grijs onder de officiële ranglijst.
-- De officiële ranglijst wordt gesorteerd op **laagste gemiddelde strafpunten per gespeeld potje**.
-- Bij exact hetzelfde gemiddelde beslist eerst het aantal gewonnen potjes en daarna het aantal gespeelde potjes.
-- Overwinningen en alle strafpunten worden vanaf het eerste potje bijgehouden.
+De deellink staat in Beheer. Nieuwe gasten kiezen hun naam uit de toegevoegde deelnemers. De gastweergave haalt uitsluitend dit toernooi op en toont geen gewone periodes, spelerslijst of logboek. Het gewone hoofdadres blijft openbaar, zoals bij de bestaande app. De link vormt geen afscherming van dat hoofdadres.
 
-## Puntentelling
+Een gebruiker die vanuit de gewone app komt, kan uitsluitend via **Beheer → Toernooi verlaten** terugkeren, na de waarschuwing ‘Weet je zeker dat je toernooi wilt verlaten?’. Alleen die telefoon keert terug; de deelnemer blijft in het toernooi. Deze keuze wordt per browser/apparaat onthouden. Handmatig openen via Beheer of de keuzelijst heft deze keuze op; een nieuw toernooi opent weer automatisch.
 
-Bij drie spelers kan iedere speler maximaal 18 kaarten hebben. De invoergrens wordt automatisch aangepast aan het aantal deelnemers.
+Toernooien hebben eigen deelnemers, potjes, ranglijsten en offline wachtrijen. Nieuwe gastnamen worden niet toegevoegd aan de gewone spelerslijst. Toernooipotjes tellen niet mee in enige gewone periode- of jaarstand. Er geldt geen grens van tien potjes: spelers tellen vanaf hun eerste potje mee. Zonder potjes staan zij onderaan. Het rangschikkingscriterium wordt bij aanmaken overgenomen van de groep en staat voor het toernooi vast.
 
-- winnaar: 0 strafpunten;
-- 1–9 kaarten: 1 strafpunt per kaart;
-- 10–12 kaarten: dubbele strafpunten;
-- 13 kaarten of meer: altijd 39 strafpunten.
+Na afsluiten staat het toernooi als archiefkeuze in de gewone keuzelijst. Uitslagen en deelnemers zijn dan alleen-lezen; de eindstand en top-3-oorkondes kunnen worden afgedrukt. Laat eerst alle telefoons hun offline potjes synchroniseren. Niet eerder ontvangen scores worden na afsluiten geweigerd en blijven lokaal in hun eigen wachtrij staan.
 
-## Historie en PDF-rapport
+## Gewone competitie
 
-Op de pagina **Historie** kan een begin- en einddatum worden gekozen. De website berekent vervolgens opnieuw de ranglijst, gemiddelde strafpunten, overwinningen en het aantal gespeelde potjes over uitsluitend die periode. De kwalificatiegrens van 10 potjes geldt binnen de geselecteerde periode.
+Gewone periodes blijven los van de toernooien werken. Een periodestand telt vanaf tien potjes officieel mee. De jaarstand vereist minimaal tien potjes in iedere afgesloten periode van dat jaar. Beheer kan het rangschikkingscriterium kiezen. Een afgesloten periode bewaart het eigen criterium en is alleen-lezen.
 
-De knoppen **CSV exporteren** en **PDF opslaan** gebruiken dezelfde geselecteerde periode. **PDF opslaan** opent het afdrukvenster van de browser; kies daar **Opslaan als PDF**. Hiervoor is geen wijziging in Supabase nodig.
+Scores: winnaar nul, 1–9 kaarten één strafpunt per kaart, 10–12 kaarten dubbel, vanaf 13 kaarten maximaal 39 strafpunten. Elk potje heeft 2–8 deelnemers; de kaartlimiet is afhankelijk van dat aantal. Sortering gebruikt de volledige getallen en pas de weergave rondt af.
 
-## Logboek
+## Database en toegang
 
-De website vraagt bij het openen wie de site gebruikt. De gekozen naam wordt lokaal onthouden en kan bovenaan worden gewijzigd.
+De browser gebruikt uitsluitend de publishable key uit `config.js` en vooraf gedefinieerde databasefuncties. De nieuwe toernooitabellen hebben RLS en geen directe rechten voor `anon` of `authenticated`. Interne helpers staan in `big2_private` en zijn voor deze rollen niet uitvoerbaar. Publieke functies controleren de toernooilink, de gekozen game master of de bestaande beheerderscode, afhankelijk van de actie. Er staat geen beheerderscode in de broncode of migraties.
 
-Het logboek registreert:
+Supabase Advisors meldt openbare `SECURITY DEFINER`-functies en RLS zonder policies. Dat is hier bewust: tabellen zijn dicht en de expliciet toegestane RPCs vormen de toegang. Zie [databasefuncties](https://supabase.com/docs/guides/database/functions) en [de linter-uitleg](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable). Het bestaande publieke hoofdadres en de eerdere gewone RPCs zijn ongewijzigd.
 
-- het openen van de website, eenmaal per browsersessie;
-- toevoegen van een potje;
-- aanpassen van winnaar, kaarten of opmerking;
-- verwijderen van een potje;
-- toevoegen van een speler;
-- activeren of deactiveren van een speler.
+## Bijwerken en testen
 
-**Let op:** de identiteit is gebaseerd op de naam die de gebruiker zelf kiest. Dit is geschikt voor een vertrouwde vakantiegroep, maar is geen waterdichte gebruikersauthenticatie.
+Zie `README-INSTALLATIE.md` voor de update van de bestaande v26-installatie. Deze repository bevat geen volledig installatieschema voor een lege database.
 
-## Eerst in demomodus testen
+De app heeft geen buildstap. Testhulpmiddelen zijn alleen voor ontwikkeling:
 
-`config.js` staat standaard op `demoMode: true`. De gegevens en het logboek staan dan alleen in de browser van dat apparaat. De demoversie begint met een lege spelerslijst; ga naar **Beheer** om de namen toe te voegen.
-
-Gebruik bij voorkeur een lokale webserver:
-
-```bash
-python -m http.server 8080
+```sh
+pnpm install --frozen-lockfile
+pnpm test
+pnpm run check
+node tests/local-preview.mjs
 ```
 
-Open daarna `http://localhost:8080`.
-
-## Gedeelde database instellen of bijwerken
-
-1. Maak een Supabase-project, of open het bestaande project.
-2. Open **SQL Editor**.
-3. Voer `supabase/setup.sql` volledig uit. Het script verwijdert de oude groepscode en werkt een eerdere installatie bij.
-4. Wijzig bij een eerste installatie onderaan het SQL-bestand vooraf:
-   - groepsslug;
-   - groepsnaam;
-   - beheerderscode.
-5. Open in Supabase **Project Settings > API**.
-6. Kopieer de Project URL en Publishable key.
-7. Vul deze in `config.js` in en zet `demoMode` op `false`.
-8. Zorg dat `groupSlug` gelijk is aan de slug in de database.
-
-Gebruik uitsluitend de **Publishable key** in de website. Plaats nooit een `service_role`- of secret key in GitHub.
-
-## Publiceren of bijwerken op GitHub Pages
-
-1. Upload de bestanden naar de hoofdmap van de repository.
-2. Overschrijf bij deze interface-update `index.html`, `app.js`, `styles.css`, `sw.js` en eventueel `README.md`.
-3. Voor de historie- en PDF-functie hoeft `supabase/setup.sql` niet opnieuw te worden uitgevoerd.
-4. Ga naar **Settings > Pages**.
-5. Gebruik `main` en `/ (root)` als publicatiebron.
-6. Herlaad de website na publicatie.
-
-## Beveiligingsmodel
-
-De tabellen zijn niet direct toegankelijk voor publieke websitegebruikers. De webapp roept uitsluitend vooraf gedefinieerde databasefuncties aan. Lezen en potjes toevoegen zijn openbaar; spelersbeheer, correcties en verwijderingen controleren de beheerderscode.
+De lokale preview draait op `http://127.0.0.1:8765` met verzonnen spelers en een tijdelijke database in het geheugen. De testcode is `test-pin`. Deze preview maakt geen verbinding met Supabase. De databasetests gebruiken echte lokale Postgres-functies, met fixtureversies van de bestaande groeps- en PIN-helpers. Zij controleren onder meer toegangsrechten, scheiding van gewone uitslagen, archivering en dubbele synchronisatie.

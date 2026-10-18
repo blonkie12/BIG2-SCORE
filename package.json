@@ -1,0 +1,12 @@
+{
+  "name": "big2-score",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check app.js && node --check tournaments.js && node --check sw.js"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "linkedom": "0.18.13"
+  }
+}

@@ -1176,3 +1176,21 @@ dialog.image-viewer-dialog::backdrop {
     min-height: 40px;
   }
 }
+
+/* Standalone tournament controls */
+[hidden] { display: none !important; }
+.tournament-mode #view-admin > section:not(#tournament-admin) { display: none; }
+.tournament-mode .bottom-nav { grid-template-columns: repeat(4, 1fr); }
+#tournament-admin-content { display: grid; gap: 1rem; }
+#tournament-admin-content > button { justify-self: start; }
+#tournament-admin-content input[readonly] { width: 100%; font-size: .85rem; }
+.tournament-rename-form { display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
+.tournament-rename-form .grow { flex: 1 1 12rem; }
+.tournament-exit { border-top: 1px solid var(--border, #cbd5e1); padding-top: 1rem; }
+#tournament-dialog fieldset, #tournament-add-dialog fieldset { border: 0; padding: 0; margin: 0; }
+#tournament-dialog .player-chips, #tournament-add-dialog .player-chips { display: flex; gap: .5rem; flex-wrap: wrap; }
+#tournament-dialog, #tournament-add-dialog { max-height: 90dvh; overflow-y: auto; }
+#tournament-create-form, #tournament-add-form { display: grid; gap: 14px; }
+#tournament-create-form .dialog-actions, #tournament-add-form .dialog-actions { margin-top: 0; }
+#tournament-dialog .player-chip, #tournament-add-dialog .player-chip { position: relative; }
+#tournament-dialog .player-chip input, #tournament-add-dialog .player-chip input { width: 1px; height: 1px; left: 0; top: 0; }

@@ -2,7 +2,8 @@
   "use strict";
 
   const config = window.BIG2_CONFIG || {};
-  const QUALIFYING_GAMES = 10;
+  const TOURNAMENT_MODE = document.body.hasAttribute("data-tournament");
+  const QUALIFYING_GAMES = TOURNAMENT_MODE ? 1 : 10;
   const REMEMBERED_PLAYERS_TTL_MS = 120 * 60 * 1000;
   const ADMIN_ACTOR_KEY = "__admin__";
   const DEFAULT_RANKING_CRITERION = "average_penalty";
@@ -147,7 +148,8 @@
       players: Array.isArray(next?.players) ? next.players : [],
       periods: Array.isArray(next?.periods) ? next.periods : [],
       games,
-      logs: Array.isArray(next?.logs) ? next.logs : []
+      logs: Array.isArray(next?.logs) ? next.logs : [],
+      tournament: next?.tournament || null
     };
   }
 
@@ -195,6 +197,7 @@
   }
 
   function ensureSelectedScope() {
+    if (TOURNAMENT_MODE && state.periods[0]) { selectedScopeKey = `period:${state.periods[0].id}`; return; }
     if (scopeExists(selectedScopeKey)) return;
     let saved = "";
     try { saved = localStorage.getItem(scopeStorageKey()) || ""; } catch {}
@@ -256,7 +259,7 @@
     const yearOptions = years.map((year) => `<option value="year:${year}">📊 Jaarstand ${year}</option>`).join("");
     const activeOptions = active.map((period) => `<option value="period:${period.id}">▶ ${escapeHtml(period.name)}</option>`).join("");
     const archiveOptions = archived.map((period) => `<option value="period:${period.id}">▣ ${escapeHtml(period.name)} · archief</option>`).join("");
-    elements.periodSelect.innerHTML = `${yearOptions}${activeOptions ? `<optgroup label="Actieve periodes">${activeOptions}</optgroup>` : ""}${archiveOptions ? `<optgroup label="Archief">${archiveOptions}</optgroup>` : ""}`;
+    elements.periodSelect.innerHTML = `${yearOptions}${activeOptions ? `<optgroup label="Actieve periodes">${activeOptions}</optgroup>` : ""}${archiveOptions ? `<optgroup label="Archief">${archiveOptions}</optgroup>` : ""}${tour.selectorOptions()}`;
     elements.periodSelect.value = selectedScopeKey;
 
     const scope = currentScope();
@@ -271,7 +274,7 @@
 
     const entryTab = $("#tab-entry");
     entryTab.disabled = !scopeIsWritable();
-    entryTab.title = scopeIsWritable() ? `Potje invoeren in ${period.name}` : "Kies rechtsboven eerst een actieve periode";
+    entryTab.title = scopeIsWritable() ? `Potje invoeren in ${period.name}` : TOURNAMENT_MODE ? "Dit toernooi is afgesloten" : "Kies rechtsboven eerst een actieve periode";
   }
 
   function rankingCriterion() {
@@ -664,7 +667,7 @@
       if (!this.baseUrl || !this.key) throw new Error("Supabase-configuratie ontbreekt.");
     }
 
-    async rpc(functionName, params) {
+    async rpcRaw(functionName, params) {
       let response;
       try {
         response = await fetch(`${this.baseUrl}/rest/v1/rpc/${functionName}`, {
@@ -701,7 +704,11 @@
         throw new Error(message);
       }
 
-      return normalizeState(data);
+      return data;
+    }
+
+    async rpc(functionName, params) {
+      return normalizeState(await this.rpcRaw(functionName, params));
     }
 
     bootstrap() {
@@ -803,6 +810,25 @@
     }
   }
 
+  class TournamentBackend extends SupabaseBackend {
+    bootstrap() { return this.rpc("big2_tournament_bootstrap", { p_token: tour.token }); }
+    async logAccess() { return state; }
+    saveGame(id, payload, actor, clientGameId) {
+      return this.rpc("big2_tournament_save_game", {
+        p_token: tour.token, p_actor_id: actor?.id || null,
+        p_game_id: id, p_client_game_id: clientGameId || null,
+        p_entered_by: payload.entered_by, p_winner: payload.winner,
+        p_entries: payload.entries, p_note: payload.note || null,
+        p_played_at: payload.played_at || new Date().toISOString()
+      });
+    }
+    addGame(payload, actor, clientGameId = uuid()) { return this.saveGame(null,payload,actor,clientGameId); }
+    updateGame(id,payload,_pin,actor) { return this.saveGame(id,payload,actor,null); }
+    deleteGame(id,_pin,actor) {
+      return this.rpc("big2_tournament_delete_game", {p_token:tour.token,p_actor_id:actor?.id || null,p_game_id:id});
+    }
+  }
+
   function showToast(message, isError = false) {
     elements.toast.textContent = message;
     elements.toast.classList.toggle("error", isError);
@@ -835,14 +861,14 @@
     serverReachable = true;
     lastSyncedAt = new Date().toISOString();
     if (!config.demoMode && offlineStore) {
-      await offlineStore.putState(config.groupSlug, state, lastSyncedAt);
+      await offlineStore.putState(tour.storageKey, state, lastSyncedAt);
     }
     return state;
   }
 
   async function loadCachedState() {
     if (config.demoMode || !offlineStore) return null;
-    const cached = await offlineStore.getState(config.groupSlug);
+    const cached = await offlineStore.getState(tour.storageKey);
     if (!cached?.state) return null;
     lastSyncedAt = cached.synced_at || null;
     return normalizeState(cached.state);
@@ -865,7 +891,7 @@
       return;
     }
 
-    const pendingCount = await offlineStore.countPendingGames(config.groupSlug);
+    const pendingCount = await offlineStore.countPendingGames(tour.storageKey);
     const connectionUnavailable = !navigator.onLine || !serverReachable;
 
     elements.offlineEntryNote.hidden = !connectionUnavailable;
@@ -917,7 +943,7 @@
 
     await offlineStore.addPendingGame({
       client_game_id: clientGameId,
-      group_slug: config.groupSlug,
+      group_slug: tour.storageKey,
       payload: { ...payload, played_at: playedAt },
       actor,
       played_at: playedAt,
@@ -946,7 +972,7 @@
       return;
     }
 
-    const pending = await offlineStore.getPendingGames(config.groupSlug);
+    const pending = await offlineStore.getPendingGames(tour.storageKey);
     if (!pending.length) {
       await updateOfflineStatus();
       if (!silent) showToast("Er staan geen potjes te wachten.");
@@ -1024,13 +1050,15 @@
 
   function setupMode() {
     if (config.demoMode) {
+      if (TOURNAMENT_MODE) throw new Error("Toernooien zijn alleen beschikbaar in de gekoppelde app.");
       backend = new DemoBackend();
       elements.modeBanner.hidden = false;
       elements.modeBanner.textContent = "Demomodus: gegevens en logboek staan alleen op dit apparaat. Koppel Supabase voor één gedeelde stand.";
     } else {
       const invalid = !config.supabaseUrl || config.supabaseUrl.includes("JOUW-") || !config.supabasePublishableKey || config.supabasePublishableKey.includes("JOUW-");
       if (invalid) throw new Error("Vul eerst config.js in of zet demoMode op true.");
-      backend = new SupabaseBackend();
+      if (TOURNAMENT_MODE && !/^[a-f0-9]{64}$/.test(tour.token)) throw new Error("Toernooilink ontbreekt of is ongeldig.");
+      backend = TOURNAMENT_MODE ? new TournamentBackend() : new SupabaseBackend();
     }
   }
 
@@ -1039,7 +1067,7 @@
     elements.identitySelect.innerHTML = [
       '<option value="">Kies je naam</option>',
       ...activePlayers.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`),
-      `<option value="${ADMIN_ACTOR_KEY}">Beheerder (alleen beheer)</option>`
+      ...(TOURNAMENT_MODE ? [] : [`<option value="${ADMIN_ACTOR_KEY}">Beheerder (alleen beheer)</option>`])
     ].join("");
     if (activePlayers.some((player) => player.id === currentActorKey) || currentActorKey === ADMIN_ACTOR_KEY) {
       elements.identitySelect.value = currentActorKey;
@@ -1050,7 +1078,7 @@
     const stored = localStorage.getItem(actorStorageKey()) || "";
     if (!force && !currentActorKey) currentActorKey = stored;
     const validPlayer = state.players.some((player) => player.id === currentActorKey && player.active);
-    if (!force && (validPlayer || currentActorKey === ADMIN_ACTOR_KEY)) return currentActor();
+    if (!force && (validPlayer || (!TOURNAMENT_MODE && currentActorKey === ADMIN_ACTOR_KEY))) return currentActor();
 
     populateIdentitySelect();
     if (!elements.identityDialog.open) elements.identityDialog.showModal();
@@ -1088,6 +1116,7 @@
 
   async function ensureLoaded() {
     try {
+      if (await tour.checkAutoEntry()) return;
       let loadedFromServer = false;
 
       if (config.demoMode) {
@@ -1114,6 +1143,7 @@
       renderAll();
       await updateOfflineStatus();
 
+      currentActorKey = tour.initialActor(state, currentActorKey);
       const actor = await requestIdentity(false);
       if (actor && (config.demoMode || loadedFromServer)) {
         try {
@@ -1240,6 +1270,7 @@
   }
 
   function qualificationRuleText() {
+    if (TOURNAMENT_MODE) return `Iedereen telt mee vanaf het eerste potje · ${RANKING_CRITERIA[rankingCriterion()].short}`;
     const scope = currentScope();
 
     if (scope?.type === "year") {
@@ -1509,7 +1540,7 @@
       ? leaderDetailText(leader)
       : currentScope()?.type === "year"
         ? "Nog niemand voldoet aan de voorwaarden voor de officiële jaarstand"
-        : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
+        : TOURNAMENT_MODE ? "Nog geen toernooipotjes gespeeld" : `Nog niemand heeft ${QUALIFYING_GAMES} potjes gespeeld`;
     elements.rankingRuleLabel.textContent = qualificationRuleText();
 
     elements.rankingBody.innerHTML = rankingRowsHtml(stats);
@@ -1518,6 +1549,7 @@
   }
 
   function gameCard(game, allowActions) {
+    allowActions = allowActions && (!TOURNAMENT_MODE || tour.isMaster());
     const winner = playerName(game.winner);
     const entries = [...(game.entries || [])].sort((a, b) => (a.player_id === game.winner ? -1 : b.player_id === game.winner ? 1 : a.cards - b.cards));
     const pills = entries.map((entry) => {
@@ -1561,7 +1593,7 @@
     elements.historyPlayerCount.textContent = stats.length;
     elements.historyRankingBody.innerHTML = rankingRowsHtml(stats, "Geen spelers in deze periode.");
     elements.historyRankingRuleLabel.textContent =
-      `Binnen deze selectie: vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
+      TOURNAMENT_MODE ? qualificationRuleText() : `Binnen deze selectie: vanaf ${QUALIFYING_GAMES} potjes · ${RANKING_CRITERIA[rankingCriterion()].short}`;
     elements.historyPrintTitle.textContent = `${scopeTitle()} – stand en historie`;
     elements.historyPrintMeta.textContent = `${historyPeriodText()} · ${games.length} potje${games.length === 1 ? "" : "s"} · rapport gemaakt op ${formatLogDate(new Date().toISOString())}`;
     renderGameList(elements.historyGames, games, scopeIsWritable());
@@ -1706,10 +1738,12 @@
 
   function renderAll() {
     ensureSelectedScope();
-    elements.groupTitle.textContent = "Big Two Score";
+    elements.groupTitle.textContent = state.tournament?.name || "Big Two Score";
     updateCurrentUserButton();
     renderPeriodSelector();
-    renderDashboard(); renderEntry(); renderHistory(); renderLogbook(); renderAdmin();
+    renderDashboard(); renderEntry(); renderHistory(); renderLogbook();
+    if (!TOURNAMENT_MODE) renderAdmin();
+    tour.render();
   }
 
   function printPosition(row, index) {
@@ -1741,9 +1775,9 @@
     if (!games.length) return showToast("Er zijn geen potjes in deze stand om af te drukken.", true);
     const stats = getStats(games, { qualificationMode: "games" });
     elements.printStandingsTitle.textContent = scopeTitle();
-    elements.printStandingsMeta.textContent = `${games.length} potje${games.length === 1 ? "" : "s"} · ${RANKING_CRITERIA[rankingCriterion()].label} · vanaf ${QUALIFYING_GAMES} potjes officieel`;
+    elements.printStandingsMeta.textContent = `${games.length} potje${games.length === 1 ? "" : "s"} · ${RANKING_CRITERIA[rankingCriterion()].label} · ${TOURNAMENT_MODE ? "iedereen telt mee vanaf het eerste potje" : `vanaf ${QUALIFYING_GAMES} potjes officieel`}`;
     elements.printStandingsBody.innerHTML = printableRankingRows(stats);
-    elements.printStandingsFooter.textContent = `Big Two Score · afgedrukt ${formatLogDate(new Date().toISOString())} · spelers met minder dan ${QUALIFYING_GAMES} potjes staan buiten de officiële klassering.`;
+    elements.printStandingsFooter.textContent = `Big Two Score · afgedrukt ${formatLogDate(new Date().toISOString())} · ${TOURNAMENT_MODE ? "toernooistand, los van de jaarstand" : `spelers met minder dan ${QUALIFYING_GAMES} potjes staan buiten de officiële klassering.`}`;
     document.body.classList.add("printing-standings");
     window.print();
   }
@@ -1828,7 +1862,7 @@
     const period = periodById(archiveButton.dataset.archivePeriod);
     if (!period) return showToast("Periode niet gevonden.", true);
 
-    const pending = offlineStore ? await offlineStore.getPendingGames(config.groupSlug) : [];
+    const pending = offlineStore ? await offlineStore.getPendingGames(tour.storageKey) : [];
     const pendingForPeriod = pending.filter((record) => sameId(record?.payload?.period_id, period.id)).length;
     if (pendingForPeriod > 0) {
       return showToast(`Eerst synchroniseren: op dit apparaat wachten nog ${pendingForPeriod} potje${pendingForPeriod === 1 ? "" : "s"} voor ${period.name}.`, true);
@@ -1856,14 +1890,28 @@
   }
 
   async function askAdminPin() {
+    if (TOURNAMENT_MODE) {
+      if (!tour.isMaster()) throw new Error("Alleen de game master kan dit aanpassen.");
+      return "";
+    }
     if (config.demoMode) return "demo";
-    const value = window.prompt("Vul de beheerderscode in:");
-    if (!value) throw new Error("Beheerderscode ontbreekt.");
-    return value.trim();
+    const dialog = $("#admin-pin-dialog");
+    const input = $("#admin-pin-input");
+    input.value = "";
+    dialog.returnValue = "";
+    dialog.showModal();
+    const pin = await new Promise(resolve => dialog.addEventListener("close", () => {
+      const value = dialog.returnValue === "confirm" ? input.value.trim() : "";
+      input.value = "";
+      resolve(value);
+    }, { once: true }));
+    if (!pin) throw new Error("Beheeractie geannuleerd.");
+    return pin;
   }
 
   async function confirmAction(title, text) {
     elements.confirmTitle.textContent = title; elements.confirmText.textContent = text;
+    elements.confirmDialog.returnValue = "";
     elements.confirmDialog.showModal();
     const result = await new Promise((resolve) => {
       elements.confirmDialog.addEventListener("close", () => resolve(elements.confirmDialog.returnValue), { once: true });
@@ -2340,6 +2388,7 @@
     $$(".nav-button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
 
     elements.periodSelect.addEventListener("change", () => {
+      if (tour.select(elements.periodSelect.value)) return;
       selectedScopeKey = elements.periodSelect.value;
       saveSelectedScope();
       historyStart = ""; historyEnd = "";
@@ -2506,6 +2555,7 @@
       offlineStore = new OfflineStore();
       await offlineStore.open();
       setupMode();
+      tour.install();
       bindEvents();
       await ensureLoaded();
     } catch (error) {
@@ -2516,10 +2566,19 @@
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
-        .register("sw.js?v=26", { updateViaCache: "none" })
+        .register("sw.js?v=27", { updateViaCache: "none" })
         .catch(() => {});
     }
   }
 
+  const tour = window.Big2Tournaments({
+    config, escapeHtml, getState: () => state, getActor: currentActor,
+    rpc: (...args) => backend.rpcRaw(...args),
+    applyState: applyServerState, renderAll, showToast, confirm: confirmAction,
+    requireOnline: requireOnlineAction, requireActor, askAdminPin,
+    reload: ensureLoaded,
+    beforeAutoEntry: () => syncPendingGames({ silent: true }),
+    pendingCount: () => offlineStore ? offlineStore.countPendingGames(tour.storageKey) : 0
+  });
   init();
 })();

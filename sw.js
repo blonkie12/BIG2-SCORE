@@ -1,10 +1,12 @@
-const CACHE = "big2-v26-compact-mobile-header";
+const CACHE = "big2-v27-tournaments";
 const APP_SHELL = [
   "./",
   "index.html",
-  "styles.css?v=26",
-  "app.js?v=26",
-  "config.js?v=26",
+  "tournament.html",
+  "tournaments.js?v=27",
+  "styles.css?v=27",
+  "app.js?v=27",
+  "config.js?v=27",
   "manifest.webmanifest",
   "icon.svg",
   "big-two-handrangschikking.webp"
@@ -79,12 +81,12 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (event.request.mode === "navigate") {
-    event.respondWith(networkFirst(event.request, "index.html"));
+    event.respondWith(networkFirst(event.request, url.pathname.endsWith("/tournament.html") ? "tournament.html" : "index.html"));
     return;
   }
 
   if (url.pathname.endsWith("/config.js") || url.pathname.endsWith("config.js")) {
-    event.respondWith(networkFirst(event.request, "config.js?v=26"));
+    event.respondWith(networkFirst(event.request, "config.js?v=27"));
     return;
   }
 

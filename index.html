@@ -8,7 +8,7 @@
   <title>Big Two Score</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=26">
+  <link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
   <header class="app-header">
@@ -452,6 +452,14 @@
     <button id="tab-admin" class="nav-button" data-view="admin" type="button"><span>⚙</span>Beheer</button>
   </nav>
 
+  <dialog id="admin-pin-dialog">
+    <form method="dialog" class="dialog-card">
+      <h2>Beheerderscode</h2>
+      <label><span>Vul de beheerderscode in</span><input id="admin-pin-input" type="password" autocomplete="off" required autofocus></label>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit" formnovalidate>Annuleren</button><button class="primary-button" value="confirm" type="submit">Doorgaan</button></div>
+    </form>
+  </dialog>
+
   <dialog id="identity-dialog">
     <form id="identity-form" method="dialog" class="dialog-card">
       <p class="eyebrow">Logboek</p>
@@ -598,7 +606,8 @@
       </div>
     </form>
   </dialog>
-  <script src="config.js?v=26"></script>
-  <script src="app.js?v=26"></script>
+  <script src="config.js?v=27"></script>
+  <script src="tournaments.js?v=27"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>
